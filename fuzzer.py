@@ -1,9 +1,37 @@
 import cma
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
+# import seaborn as sns
 import subprocess
 import os
+import time
+import functools
+
+class _Timer:
+    logs = {}
+    def timeit(f):
+        @functools.wraps(f)
+        def newf(*args, **kwargs):
+            startTime = time.time()
+            output = f(*args, **kwargs)
+            elapsedTime = time.time() - startTime
+
+            if not f.__name__ in _Timer.logs:
+                _Timer.logs[f.__name__] = 0.
+            _Timer.logs[f.__name__] += elapsedTime * 1000
+
+            return output
+
+            # print('function [{}] finished in {} ms'.format(
+            #     f.__name__, int(elapsedTime * 1000)))
+        return newf
+
+    def reset():
+        _Timer.logs = {}
+    
+
+
+    
 
 class _Program:
     def __init__(self, path):
@@ -17,33 +45,42 @@ class _Program:
             subprocess.run(['gcc', self.path, '__VERIFIER.c', '-o', self.pname, '--coverage'])
             self._compiled = True
 
+    @_Timer.timeit
     def _reset(self):
         # subprocess.run('del *.gcda', shell = True)
         os.remove(self.pname+'.gcda')
+        
 
-
+    @_Timer.timeit
     def _run(self, sample_bytes):
         subprocess.run(self.pname, input = sample_bytes)
 
+    @_Timer.timeit
+    def _gcov(self):
+        return subprocess.run(['gcov', '-n', self.pname], capture_output = True).stdout.decode()
 
-    def get_coverage(self, sample_bytes):
-        self._run(sample_bytes)
-        output = subprocess.run(['gcov', '-n', self.pname], stdout = subprocess.PIPE).stdout.decode()
-        # output = subprocess.run(['gcov', self.path], stdout = subprocess.PIPE).stdout.decode()
-        # subprocess.run(['del', self.pname+'.gcda'], shell = True)
-        self._reset()
-
-        # print(output)
+    @_Timer.timeit
+    def _cov(self, output):
         start, end = 0 , 0
-        # input('next')
         for i in range(len(output)):
             if output[i] == ':':
                 start = i + 1
             elif output[i] == '%':
                 end = i
                 break
-
         return float(output[start:end])
+
+
+    def get_coverage(self, sample_bytes):
+        # self.timer.timeit(self._run)
+        # output = self.timer.timeit(self._gcov)
+        # self.timer.timeit(self._reset)
+        # return self.timer.timeit(self._cov)(output)
+        
+        self._run(sample_bytes)
+        output = self._gcov()
+        self._reset()
+        return self._cov(output)
 
 
 class Fuzzer:
@@ -195,12 +232,13 @@ class Fuzzer:
 
         es = cma.CMAEvolutionStrategy(*self._args)
         g = 0
-        while not es.stop():
+        while not _Timer.timeit(es.stop)():
             g += 1
             print(g)
-            solutions = es.ask()
+            solutions = _Timer.timeit(es.ask)()
             values = [f(x) for x in solutions]
-            es.tell(solutions, values)
+            _Timer.timeit(es.tell)(solutions, values)
+            # es.tell(solutions, values)
             print('\n')
         """
         'CMAEvolutionStrategyResult', [
@@ -219,6 +257,11 @@ class Fuzzer:
         sample = es.result.xbest
         self._samples.append(sample)
         return sample
+
+    def get_logs(self):
+        logs = _Timer.logs
+        _Timer.reset()
+        return logs
 
 
 def bytes_to_int(bytes: np.ndarray) -> int:
@@ -549,9 +592,9 @@ def test0(sample: np.ndarray):
 def main4():
     mean = 2 * [128]
     sigma = 64
-    options = dict(bounds = [0, 256], popsize = 5, verb_disp = 0)
+    options = dict(bounds = [0, 256], popsize = 10, verb_disp = 0)
     programs = ['./test_2max.c']
-    sample_size = 2
+    sample_size = 1
 
     for program in programs:
         fuzzer = Fuzzer(None, mean, sigma, options, program_path = program)
@@ -567,6 +610,7 @@ def main4():
     for b in bs:
         subprocess.run('test2', input = bytes(b.astype(int).tolist()))
     subprocess.run(['gcov', 'test2'])
+    print(fuzzer.get_logs())
     print(samples)
     print(inputs)
 
@@ -644,7 +688,6 @@ def main6():
     # visualize_results1(samples, coverages, 'test1.c')
     samples, coverages = zip(*sorted(zip(samples, coverages)))
     visualize_results1(samples, coverages, 'test2.c')
-
 
 
 if __name__ == "__main__":
