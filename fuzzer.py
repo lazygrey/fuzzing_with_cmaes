@@ -47,8 +47,11 @@ class _Program:
 
     @_Timer.timeit
     def _reset(self):
-        # subprocess.run('del *.gcda', shell = True)
-        os.remove(self.pname+'.gcda')
+        if os.path.isfile(self.pname + '.gcda'):
+            os.remove(self.pname+'.gcda')
+        else:
+            print('!No gcda file!')
+            # maybe program reached error?
         
 
     @_Timer.timeit
@@ -57,7 +60,7 @@ class _Program:
 
     @_Timer.timeit
     def _gcov(self):
-        return subprocess.run(['gcov', '-n', self.pname], capture_output = True).stdout.decode()
+        return subprocess.run(['gcov', self.pname], capture_output = True).stdout.decode()
 
     @_Timer.timeit
     def _cov(self, output):
@@ -130,7 +133,9 @@ class Fuzzer:
         # print('bytes:', bytes)
         # print('int:', result)
         # return str(result).encode()
-        return bytes(sample.astype(int).tolist())
+        out = bytes(sample.astype(int).tolist())
+        # print(out)
+        return out
 
 
     def _f(self, sample:np.ndarray):
@@ -537,13 +542,21 @@ def main2():
 
     # fuzzer = Fuzzer()
     # subprocess.run('del *.gcda', shell = True)
-    subprocess.run('gcc test1.c -o test1')
-    for i in range(256):
-        input = bytes([i,0,0,0])
-        output = subprocess.run('./test1', stdout=subprocess.PIPE, input = input)
-        print('generated output:',output.stdout)
+
+    # subprocess.run('gcc test1.c -o test1')
+    # for i in range(256):
+    #     input = bytes([i,0,0,0])
+    #     output = subprocess.run('./test1', stdout=subprocess.PIPE, input = input)
+    #     print('generated output:',output.stdout)
         
     # print(input)
+    subprocess.run('gcc testingsize.c __VERIFIER.c -o testingsize --coverage')
+    for i in range(1):
+        input = b'\x1a\x00\x00\x00\x1a\x00\x00\x00'
+        output = subprocess.run(['./testingsize'], capture_output = True, input = input)
+        print(output.stdout.decode())
+        subprocess.run('gcov testingsize')
+        os.remove('testingsize.gcda')
 
 def main3():
     mean = 4 * [128]
@@ -594,7 +607,7 @@ def main4():
     sigma = 64
     options = dict(bounds = [0, 256], popsize = 10, verb_disp = 0)
     programs = ['./test_2max.c']
-    sample_size = 1
+    sample_size = 8
 
     for program in programs:
         fuzzer = Fuzzer(None, mean, sigma, options, program_path = program)
@@ -608,11 +621,11 @@ def main4():
             bs.append(sample)
 
     for b in bs:
-        subprocess.run('test2', input = bytes(b.astype(int).tolist()))
-    subprocess.run(['gcov', 'test2'])
+        subprocess.run('test_2max', input = bytes(b.astype(int).tolist()))
+    subprocess.run(['gcov', 'test_2max'])
     print(fuzzer.get_logs())
-    print(samples)
-    print(inputs)
+    print('samples:', samples)
+    print('inputs:', inputs)
 
 def main5():
     program = _Program('./test_2max.c')
@@ -690,8 +703,43 @@ def main6():
     visualize_results1(samples, coverages, 'test2.c')
 
 
+def main_sv():
+    mean = 100000 * [128]
+    sigma = 64
+    options = dict(bounds = [0, 256], popsize = 10, verb_disp = 0)
+    pname = 'data_structures_set_multi_proc_ground-1'
+    # programs = ['./data_structures_set_multi_proc_ground-1.c']
+    # programs = ['./data_structures_set_multi_proc_ground-2.c'] #true
+    # programs = ['standard_init1_ground-1.c'] 
+    # programs = ['standard_copy1_ground-1.c'] # True
+    # programs = ['standard_copy1_ground-2.c']
+    # programs = ['relax-2.c'] # True
+    programs = [pname+'.c']
+    
+    sample_size = 1
+
+    for program in programs:
+        fuzzer = Fuzzer(None, mean, sigma, options, program_path = program)
+        samples = {}
+        inputs = {}
+        bs = []
+        for i in range(sample_size):
+            sample = fuzzer.get_sample()
+            samples[bytes_to_int(sample)] = fuzzer.get_coverage()
+            inputs[str(sample)] = fuzzer.get_coverage()
+            bs.append(sample)
+
+    for b in bs:
+        subprocess.run(pname, input = bytes(b.astype(int).tolist()))
+    subprocess.run(['gcov', pname])
+    print(fuzzer.get_logs())
+    # print('samples:', samples)
+    # print('inputs:', inputs)
+
+
 if __name__ == "__main__":
-    main4()
+    main_sv()
+    # main2()
     # simple_run('test2', bytes([79, 185]))
     # simple_run('test2', bytes([141,249]))
     
