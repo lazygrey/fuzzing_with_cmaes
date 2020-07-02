@@ -1,6 +1,6 @@
 import cma
 import numpy as np
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 # import seaborn as sns
 import subprocess
 import os
@@ -39,6 +39,7 @@ class _Program:
         self.pname = path[:-2] # *.c
         # self.program = path + program
         self._compiled = False
+        print("name:", self.pname, "path:",self.path)
 
     def compile(self):
         if not self._compiled:
@@ -60,10 +61,12 @@ class _Program:
 
     @_Timer.timeit
     def _gcov(self):
-        return subprocess.run(['gcov', self.pname], capture_output = True).stdout.decode()
+        return subprocess.run(['gcov', self.pname + '.gcno'], capture_output = True).stdout.decode()
 
     @_Timer.timeit
     def _cov(self, output):
+        if len(output) == 0:
+            return 0.0
         start, end = 0 , 0
         for i in range(len(output)):
             if output[i] == ':':
@@ -87,7 +90,7 @@ class _Program:
 
 
 class Fuzzer:
-    def __init__(self, function, mean, sigma, options, program_path = 'test.c', sample_size = 1, reset = False, max_popsize = 100):
+    def __init__(self, function, mean, sigma, options, program_path = 'test.c', sample_size = 1, reset = False, max_popsize = 1000):
         """Fuzzer with cmaes.
 
         Args:
@@ -111,6 +114,9 @@ class Fuzzer:
         self._resetable = reset
         self._max_popsize = max_popsize
         self._samples = []
+        self._sample_map = {}
+        self._popsize = options['popsize']
+        self.max_sample_size = sample_size
 
     def get_coverage(self):
         return -self._fbest
@@ -118,6 +124,7 @@ class Fuzzer:
     def reset_cov(self):
         if self._resetable:
             self._samples = []
+            self._sample_map = {}
 
     def encode(self, sample: np.ndarray) -> int:
         # assert len(bytes) == 4, "Integer should have 4 bytes"
@@ -137,16 +144,18 @@ class Fuzzer:
         # print(out)
         return out
 
+    def _run_all_samples(self):
+        for sample in self._samples:
+            self._program._run(self.encode(sample))
+
 
     def _f(self, sample:np.ndarray):
-        for prev_sample in self._samples:
-            self._program._run(self.encode(prev_sample))
-
+        self._run_all_samples()
         cov = self._program.get_coverage(self.encode(sample))
         return -cov
 
 
-    def get_samples(self):
+    def get_sampless(self):
         ess = []
         for i in range(1, int(len(self._mean)/self._sample_size)):
             mean = self._sample_size * self._mean[-i-1:]
@@ -236,13 +245,17 @@ class Fuzzer:
         self._program.compile()
 
         es = cma.CMAEvolutionStrategy(*self._args)
-        g = 0
-        while not _Timer.timeit(es.stop)():
-            g += 1
-            print(g)
-            solutions = _Timer.timeit(es.ask)()
+        while not _Timer.timeit(es.stop)() and es.result.iterations < 3:
+            print(len(self._samples), es.result.iterations)
+            solutions = _Timer.timeit(es.ask)(self._popsize)
+            print(len(solutions))
             values = [f(x) for x in solutions]
+            print(len(values))
             _Timer.timeit(es.tell)(solutions, values)
+            print('values:',values )
+            print('fbest:',es.result.fbest)
+            print('iterations:', es.result.iterations)
+            # print('evaluations:', es.result.evals_best)
             # es.tell(solutions, values)
             print('\n')
         """
@@ -257,11 +270,32 @@ class Fuzzer:
             'stop',
         ]
         """
+        print('stop with iteration:', es.result.iterations)
         # return sample, es.result.stds, es.result.fbest
-        self._fbest = es.result.fbest
+        # increase popsize until max or generation is 1
+        if self._max_popsize > self._popsize and es.result.iterations == 1:
+            self._popsize *= 10
+            return self.get_sample()
+        
         sample = es.result.xbest
-        self._samples.append(sample)
+        # avoid adding a sample with same coverage
+        if self._fbest != es.result.fbest:
+            self._fbest = es.result.fbest
+            self._samples.append(sample)
+            self._sample_map[str(sample)] = self._fbest
+
         return sample
+    def get_samples(self):
+        size = -1
+        while(self.max_sample_size > len(self._samples) > size):
+            self.get_sample()
+            size += 1
+
+        return self._sample_map
+
+    def gcov(self):
+        self._run_all_samples()
+        print(self._program._gcov())
 
     def get_logs(self):
         logs = _Timer.logs
@@ -704,35 +738,51 @@ def main6():
 
 
 def main_sv():
-    mean = 100000 * [128]
+    mean = 50 * 1 * [128]
     sigma = 64
-    options = dict(bounds = [0, 256], popsize = 10, verb_disp = 0)
-    pname = 'data_structures_set_multi_proc_ground-1'
+    options = dict(bounds = [0, 255.9], popsize = 100, verb_disp = 0)
+    # pname = './pals_STARTPALS_ActiveStandby.ufo.BOUNDED-10.pals'
+    # pname = './pals_lcr-var-start-time.3.ufo.BOUNDED-6.pals'
+    # pname = './cdaudio_simpl1.cil-2'
+    # pname = './s3_clnt_1.cil-1'
+    # pname = './pals_floodmax.3.ufo.BOUNDED-6.pals' # True
+    # pname = './data_structures_set_multi_proc_ground-2'
+    # pname = './pals_STARTPALS_ActiveStandby.1.ufo.BOUNDED-10.pals'
+    pname = './pals_opt-floodmax.4.ufo.BOUNDED-8.pals' # almost infinitely optimizable
+    # pname = './test_2max'
     # programs = ['./data_structures_set_multi_proc_ground-1.c']
     # programs = ['./data_structures_set_multi_proc_ground-2.c'] #true
     # programs = ['standard_init1_ground-1.c'] 
     # programs = ['standard_copy1_ground-1.c'] # True
     # programs = ['standard_copy1_ground-2.c']
     # programs = ['relax-2.c'] # True
+    # programs = ['pals_lcr-var-start-time.3.ufo.BOUNDED-6.pals.c'] # True
     programs = [pname+'.c']
-    
-    sample_size = 1
+
+    sample_size = 50
+    max_popsize = 100
 
     for program in programs:
-        fuzzer = Fuzzer(None, mean, sigma, options, program_path = program)
-        samples = {}
-        inputs = {}
-        bs = []
-        for i in range(sample_size):
-            sample = fuzzer.get_sample()
-            samples[bytes_to_int(sample)] = fuzzer.get_coverage()
-            inputs[str(sample)] = fuzzer.get_coverage()
-            bs.append(sample)
+        fuzzer = Fuzzer(None, mean, sigma, options, sample_size = sample_size, program_path = program, max_popsize=max_popsize)
+        print(fuzzer.get_samples())
+        print(fuzzer.get_logs())
+        fuzzer.gcov()
+    
 
-    for b in bs:
-        subprocess.run(pname, input = bytes(b.astype(int).tolist()))
-    subprocess.run(['gcov', pname])
-    print(fuzzer.get_logs())
+    # for program in programs:
+    #     fuzzer = Fuzzer(None, mean, sigma, options, program_path = program)
+    #     samples = {}
+    #     inputs = {}
+    #     bs = []
+    #     for i in range(sample_size):
+    #         sample = fuzzer.get_sample()
+    #         samples[bytes_to_int(sample)] = fuzzer.get_coverage()
+    #         inputs[str(sample)] = fuzzer.get_coverage()
+    #         bs.append(sample)
+
+    # for b in bs:
+    #     subprocess.run(pname, input = bytes(b.astype(int).tolist()))
+    # subprocess.run(['gcov', pname+'.gcno'])
     # print('samples:', samples)
     # print('inputs:', inputs)
 
