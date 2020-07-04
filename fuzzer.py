@@ -34,16 +34,24 @@ class _Timer:
     
 
 class _Program:
-    def __init__(self, path):
+    def __init__(self, path = 'test.c', verifier_path = 'programs/', build_path = 'build/'):
         self.path = path
-        self.pname = path[:-2] # *.c
+        self.verifier_path = verifier_path
+        self.build_path = build_path
+        self.pname = [] # *.c
+        for c in reversed(path[:-2]):
+            if c == '/':
+                break
+            self.pname.insert(0, c)
+        self.pname = ''.join(self.pname)
+
         # self.program = path + program
         self._compiled = False
         print("name:", self.pname, "path:",self.path)
 
     def compile(self):
         if not self._compiled:
-            subprocess.run(['gcc', self.path, '__VERIFIER.c', '-o', self.pname, '--coverage'])
+            subprocess.run(['gcc',self.path , self.verifier_path + '__VERIFIER.c', '-o', self.build_path + self.pname, '--coverage'])
             self._compiled = True
 
     @_Timer.timeit
@@ -57,11 +65,13 @@ class _Program:
 
     @_Timer.timeit
     def _run(self, sample_bytes):
-        subprocess.run(self.pname, input = sample_bytes)
+        # builds/test <- sample_bytes
+        subprocess.run(self.build_path + self.pname, input = sample_bytes)
 
     @_Timer.timeit
     def _gcov(self):
-        return subprocess.run(['gcov', self.pname + '.gcno'], capture_output = True).stdout.decode()
+        # gcov test
+        return subprocess.run(['gcov', self.pname + '.gcda'], capture_output = True).stdout.decode()
 
     @_Timer.timeit
     def _cov(self, output):
@@ -89,18 +99,73 @@ class _Program:
         return self._cov(output)
 
 
+class CMAES_Builder:
+    def __init__(self, mean = [128], sigma = 64, dim = 2, popsize = 10, max_popsize = 1000, max_gens = 100):
+        self._options = dict(bounds = [0, 255.99], popsize = popsize, verb_disp = 0)
+        self._args = dict(x0 = dim * mean, sigma0 = sigma, inopts = self._options)
+        self._max_popsize = max_popsize
+        self._max_gens = max_gens
+        self._es = None #
+
+    def cmaes(self):
+        self.reset_popsize()
+        self._es = cma.CMAEvolutionStrategy(**self._args)
+        return self
+
+    def stop(self):
+        return self._es.stop() and self._es.result.iterations < self._max_gens
+
+    def ask(self):
+        # may cause a problem because popsize is manually changed
+        # self._options['popsize'] *= 10
+        return self._es.ask()
+
+    def tell(self, solutions, values):
+        # print('solutions:', solutions)
+        print('values:', values)
+        return self._es.tell(solutions, values)
+
+    def is_optimized(self):
+        return self._es.result.iterations > 1
+
+    def report(self):
+        if not self.is_optimized():
+            self._options['popsize'] *= 10
+        
+
+        print('iterations:',self._es.result.iterations)
+        print('fbest:',self._es.result.fbest)
+        print('popsize:', self._options['popsize'])
+    
+    def is_over_threshold(self):
+        return self._options['popsize'] > self._max_popsize and self._es.result.iterations >= self._max_gens
+
+    def get_sample(self):
+        return self._es.result.xbest
+
+    def coverage(self):
+        return self._es.result.fbest
+
+    def reset_popsize(self):
+        self._options['popsize'] = 10
+
+
+
+
 class Fuzzer:
-    def __init__(self, function, mean, sigma, options, program_path = 'test.c', sample_size = 1, reset = False, max_popsize = 1000):
+    def __init__(self, function, mean, sigma, options, program_path = 'test.c', sample_size = 1, max_sample_size = 10, reset = False, max_popsize = 1000):
         """Fuzzer with cmaes.
 
         Args:
         sampe_type = the type of a sample to optimize
         function = score function to optimize
         """
+        self._cmaesbuilder = CMAES_Builder() # maybe parameter as dict
         # n = sample_dim[sample_type]
         # mean = n * [128]
         # sigma = 64
         # options = {'bounds' : [0, 256]}
+        options = dict(bounds = [0, 255.9], popsize = 100, verb_disp = 0)
         self._args = sample_size * mean, sigma, options
         self._mean, self._sigma, self._options = self._args
         self._scale = 1
@@ -116,7 +181,8 @@ class Fuzzer:
         self._samples = []
         self._sample_map = {}
         self._popsize = options['popsize']
-        self.max_sample_size = sample_size
+        self._max_sample_size = max_sample_size
+        self._max_gens = 100
 
     def get_coverage(self):
         return -self._fbest
@@ -236,28 +302,76 @@ class Fuzzer:
         # with fixed var
         pass
 
+    def optimize_sample(self):
+        coverage = self._f
+
+        self._program.compile()
+
+        es = self._cmaesbuilder.cmaes()
+
+        while not es.is_optimized() and not es.is_over_threshold():
+
+            while not _Timer.timeit(es.stop)():
+                solutions = _Timer.timeit(es.ask)()
+                # print(len(solutions))
+                values = [coverage(x) for x in solutions]
+                # print(len(values))
+                _Timer.timeit(es.tell)(solutions, values)
+                # print('values:',values )
+                # print('fbest:',es.coverage())
+                # print('iterations:', es.result.iterations)
+                # print('evaluations:', es.result.evals_best)
+                # es.tell(solutions, values)
+                # print('\n')
+            es.report()
+
+        """
+        'CMAEvolutionStrategyResult', [
+            'xbest',
+            'fbest',
+            'evals_best',
+            'evaluations',
+            'iterations',
+            'xfavorite',
+            'stds',
+            'stop',
+        ]
+        """
+        print('@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@end of optimize')
+        return es.is_optimized()
+        # if es.optimized():
+            # return True
+
+        # print('stop with iteration:', es.result.iterations)
+        # return sample, es.result.stds, es.result.fbest
+        # increase popsize until max or generation is 1
+        # if not es.is_optimized():
+
+        # if self._max_popsize > self._popsize and es.result.iterations == 1:
+        #     self._popsize *= 10
+        #     return self.get_sample()
+        # return False
+
     def get_sample(self):
         # with this interface, cmaes minimize the values
-        f = self._f
-        if self._function:
-            f = self._function
+        coverage = self._f
 
         self._program.compile()
 
         es = cma.CMAEvolutionStrategy(*self._args)
-        while not _Timer.timeit(es.stop)() and es.result.iterations < 3:
-            print(len(self._samples), es.result.iterations)
+        while not _Timer.timeit(es.stop)() and es.result.iterations < self._max_gens:
+            # print(len(self._samples), es.result.iterations)
             solutions = _Timer.timeit(es.ask)(self._popsize)
-            print(len(solutions))
-            values = [f(x) for x in solutions]
-            print(len(values))
+            # print(len(solutions))
+            values = [coverage(x) for x in solutions]
+            # print(len(values))
             _Timer.timeit(es.tell)(solutions, values)
-            print('values:',values )
-            print('fbest:',es.result.fbest)
-            print('iterations:', es.result.iterations)
+            # print('values:',values )
+            # print('fbest:',es.result.fbest)
+            # print('iterations:', es.result.iterations)
             # print('evaluations:', es.result.evals_best)
             # es.tell(solutions, values)
-            print('\n')
+            # print('\n')
         """
         'CMAEvolutionStrategyResult', [
             'xbest',
@@ -285,12 +399,26 @@ class Fuzzer:
             self._sample_map[str(sample)] = self._fbest
 
         return sample
+
     def get_samples(self):
         size = -1
-        while(self.max_sample_size > len(self._samples) > size):
+        while self._max_sample_size > len(self._samples) > size:
             self.get_sample()
             size += 1
 
+        return self._sample_map
+
+    def threshold(self):
+        return len(self._samples) == self._max_sample_size or self._fbest == -100
+
+    def get_testsuit(self):
+        # avoid adding not optimized sample
+        while not self.threshold() and self.optimize_sample():
+            print('adding a sample into the testsuit')
+            sample = self._cmaesbuilder.get_sample()
+            self._fbest = self._cmaesbuilder.coverage()
+            self._samples.append(sample)
+            self._sample_map[str(sample)] = self._fbest
         return self._sample_map
 
     def gcov(self):
@@ -301,6 +429,10 @@ class Fuzzer:
         logs = _Timer.logs
         _Timer.reset()
         return logs
+
+    def report(self):
+        print('reporting')
+        print(self.get_logs())
 
 
 def bytes_to_int(bytes: np.ndarray) -> int:
@@ -748,8 +880,8 @@ def main_sv():
     # pname = './pals_floodmax.3.ufo.BOUNDED-6.pals' # True
     # pname = './data_structures_set_multi_proc_ground-2'
     # pname = './pals_STARTPALS_ActiveStandby.1.ufo.BOUNDED-10.pals'
-    pname = './pals_opt-floodmax.4.ufo.BOUNDED-8.pals' # almost infinitely optimizable
-    # pname = './test_2max'
+    # pname = './pals_opt-floodmax.4.ufo.BOUNDED-8.pals' # almost infinitely optimizable
+    pname = 'programs/test_2max'
     # programs = ['./data_structures_set_multi_proc_ground-1.c']
     # programs = ['./data_structures_set_multi_proc_ground-2.c'] #true
     # programs = ['standard_init1_ground-1.c'] 
@@ -759,8 +891,8 @@ def main_sv():
     # programs = ['pals_lcr-var-start-time.3.ufo.BOUNDED-6.pals.c'] # True
     programs = [pname+'.c']
 
-    sample_size = 50
-    max_popsize = 100
+    sample_size = 1
+    max_popsize = 1000
 
     for program in programs:
         fuzzer = Fuzzer(None, mean, sigma, options, sample_size = sample_size, program_path = program, max_popsize=max_popsize)
@@ -786,9 +918,22 @@ def main_sv():
     # print('samples:', samples)
     # print('inputs:', inputs)
 
+def main_sv2():
+
+    path = 'programs/'
+
+    programs = [path+'test_2max.c']
+
+    for program in programs:
+        fuzzer = Fuzzer(None, [0], None, None, program_path = program, max_sample_size = 2)
+        t = fuzzer.get_testsuit()
+        print('testsuit:', t)
+        fuzzer.gcov()
+        fuzzer.report()
+
 
 if __name__ == "__main__":
-    main_sv()
+    main_sv2()
     # main2()
     # simple_run('test2', bytes([79, 185]))
     # simple_run('test2', bytes([141,249]))
