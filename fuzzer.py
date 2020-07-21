@@ -14,7 +14,6 @@ import random
 
 _time_log = {}
 
-TODO: timelog for optimizesample is 0 sometimes
 def _timeit(f):
         @functools.wraps(f)
         def newf(*args, **kwargs):
