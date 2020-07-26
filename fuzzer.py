@@ -5,10 +5,8 @@ import numpy as np
 import subprocess
 import os
 import time
-import functools
 import sys
 import random
-# import threading 
 
 # random.seed(0)
 
@@ -16,7 +14,6 @@ _init_time = time.time()
 _time_log = {}
 
 def _timeit(f):
-        @functools.wraps(f)
         def newf(*args, **kwargs):
             startTime = time.time()
             output = f(*args, **kwargs)
