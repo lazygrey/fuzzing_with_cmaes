@@ -41,7 +41,7 @@ OPTIONAL:
 
 -mp <max_popsize> := maximum population size while optimizing an input with CMA-ES. (default: 1000)
 
--t <timeout> := time in seconds for timeout. (default: 900)
+-t \<timeout> := time in seconds for timeout. (default: 900)
 
 
 ## Fuzzing Examples
