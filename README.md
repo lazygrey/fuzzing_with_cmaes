@@ -6,7 +6,7 @@ Operating System :: Linux only
 
 1. NumPy 
     * Install example:
-        ```bash
+        ```
         pip3 install numpy
         ```
 
@@ -14,7 +14,7 @@ Operating System :: Linux only
 2. pycma (cmaes in python)
     * Install example: more detail at [pycma](https://github.com/CMA-ES/pycma)
 
-        ```bash
+        ```
         python3 -m pip3 install cma
         ```
 3. Python 3 with version with at least Python 3.7
@@ -24,7 +24,7 @@ Operating System :: Linux only
 ## Arguments
 In a Terminal:
 
-```bash
+```
 python3 fuzzer.py <program_path> [-od <output_dir>] [-ld <log_dir>] [-mp <max_popsize>] [-t timeout]
 ```
 MANDATORY:
@@ -46,7 +46,7 @@ OPTIONAL:
 
 ## Fuzzing Examples
 Example 1: timout in 10 seconds
-```bash
+```
 python3 fuzzer.py examples/test.c -t 10
 testsuite: [array([ 58.51964139, 191.83170435]), array([159.68674647,  53.4558355 ]), array([ 90.96958387, 233.69458071]), array([146.11062388,  31.59472821]), array([248.33267195, 210.30889049]), array([209.01992056,  72.52722745])]
 File 'examples/test.c'
@@ -67,7 +67,7 @@ python3 fuzzer.py user_program_dir/user_program.c -mp 100
 
 ## Log Examples:
 Example 1: timout in 10 seconds
-```bash
+```
 program_path: examples/test.c
 initial parameters:
 input_size       max_popsize       popsize_scale_factor       max_gens      timeout
