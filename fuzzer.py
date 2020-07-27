@@ -48,6 +48,7 @@ class _Program:
     SEGMENTATION_FAULT = -11
 
     DEFAULT_DIRS = {'log' : 'logs/', 'output' : 'output/'}
+    # GCOV = {'File'}
 
     def __init__(self, path, verifier_path = 'verifiers/__VERIFIER.c', verifier_input_path = 'verifiers/__VERIFIER_input_size.c', output_dir = DEFAULT_DIRS['output'], log_dir = DEFAULT_DIRS['log'], timeout = None):
         self.path = path
@@ -74,9 +75,9 @@ class _Program:
 
     def _init_dirs(self):
         if self.output_dir[-1:] != '/':
-            self.output_dir.append('/')
+            self.output_dir += '/'
         if self.log_dir[-1:] != '/':
-            self.log_dir.append('/')
+            self.log_dir += '/'
 
         if not os.path.isdir(self.output_dir):
             os.mkdir(self.output_dir)
@@ -130,9 +131,25 @@ class _Program:
         # gcov test
         return subprocess.run(['gcov', self.pname + '.gcda'], capture_output = True, timeout=self.timeout()).stdout.decode()
 
+    # def _cov(self, output):
+    #     output.split()
+    #     ''.split()
+    #     if len(output) == 0:
+    #         return 0
+        
+
+
     def _cov(self, output):
         if len(output) == 0:
             return 0.0
+
+        cov_path = ''
+        while self.path != cov_path:
+            cov_path ,output = output.split("File '", 1)[1].split("'", 1)
+            # print('reseult!',cov_path, output)
+
+        # print('last',cov_path, output)
+            
         start, end = 0 , 0
         for i in range(len(output)):
             if output[i] == ':':
@@ -155,8 +172,15 @@ class CMAES_outputer:
     def __init__(self, mean = [128], sigma = 64, input_size = 1000, init_popsize = 7, max_popsize = 1000, max_gens = 1000):
         # print('inputdim =', input_size)
         self._input_size = input_size
+        # original
         self._options = dict(bounds = [0, 255.99], popsize = init_popsize, verb_disp = 0, seed = 123)
         self._args = dict(x0 = input_size * mean, sigma0 = sigma, inopts = self._options)
+        #
+        # Test with mean: change bounds [0, 256] to [-256, 256] and later in _f modulo them into [0,255]
+        # mean = [0]
+        # self._options = dict(bounds = [-256, 256], popsize = init_popsize, verb_disp = 0, seed = 123)
+        # self._args = dict(x0 = input_size * mean, sigma0 = sigma, inopts = self._options)
+        #
         self._max_popsize = max_popsize
         self._max_gens = max_gens
         self._es = None #
@@ -441,8 +465,13 @@ class Fuzzer:
             self._sample_map = {}
             # self._cmaesoutputer._reset()
 
-    def _encode(self, sample: np.ndarray) -> int:
+    def _encode(self, sample: np.ndarray):
+        # original
         return bytes(sample.astype(int).tolist())
+        #
+        # Test
+        # return bytes(np.vectorize(lambda x: int(x)%256)(sample).tolist())
+        #
 
     def _run_all_samples(self):
         for sample in self._samples:
@@ -570,7 +599,7 @@ class Fuzzer:
         self.optimize_testsuite()
         self._program._timeout = None
 
-        return self._samples
+        return self._total_samples
 
 
     # def gcov(self):
@@ -1148,8 +1177,64 @@ def main_test():
     # subprocess.run('gcc programs/test.c programs/__VERIFIER_input_size.c -o test')
 
     #            1,2,3,4,5,6,7,8,9,0,11,12,13,14,15,16,17,18,19
-    inp = bytes([0,0,0,0,0,0,0,0,0,0,254,254,254,0,0,0,0,0,113])
-    subprocess.run('output/pals_STARTPALS_ActiveStandby.ufo.BOUNDED-10.pals', input = inp)
+    testsuite = [np.array([ -69.48035861,   63.83027656,   18.11071919,  -96.40362277,
+        -37.03080592,  105.69332907, -155.30992382,  -27.45091392,
+         81.02162626,  -55.47269956,  -43.44985711,   -6.06154948,
+         95.4519503 ,  -40.89112667,  -28.4158923 ,  -27.79957897,
+        141.18546982,  139.96057095,   64.2624934 ]), np.array([ -69.48035861,   63.83027656,   18.11071919,  -96.40362277,
+        -37.03080592,  105.69332907, -155.30992382,  -27.45091392,
+         81.02162626,  -55.47269956,  -43.44985711,   -6.06154948,
+         95.4519503 ,  -40.89112667,  -28.4158923 ,  -27.79957897,
+        141.18546982,  139.96057095,   64.2624934 ]), np.array([ -69.48035861,   63.83027656,   18.11071919,  -96.40362277,
+        -37.03080592,  105.69332907, -155.30992382,  -27.45091392,
+         81.02162626,  -55.47269956,  -43.44985711,   -6.06154948,
+         95.4519503 ,  -40.89112667,  -28.4158923 ,  -27.79957897,
+        141.18546982,  139.96057095,   64.2624934 ]), np.array([ -69.48035861,   63.83027656,   18.11071919,  -96.40362277,
+        -37.03080592,  105.69332907, -155.30992382,  -27.45091392,
+         81.02162626,  -55.47269956,  -43.44985711,   -6.06154948,
+         95.4519503 ,  -40.89112667,  -28.4158923 ,  -27.79957897,
+        141.18546982,  139.96057095,   64.2624934 ]), np.array([ 2.31112248e+02,  7.88875081e+01, -1.00272686e+02, -1.64848604e+01,
+       -1.07149203e-01, -2.23708581e+01,  1.88348397e+02,  5.34317338e-01,
+        1.21936163e+02,  2.09374535e+02,  1.06511931e+02,  1.25130298e+02,
+       -1.87479582e+02, -3.67562446e+01, -7.15702679e+01, -1.72612956e+02,
+        6.98037430e+01,  1.98282392e+02, -1.16470826e+02]), np.array([ -69.48035861,   63.83027656,   18.11071919,  -96.40362277,
+        -37.03080592,  105.69332907, -155.30992382,  -27.45091392,
+         81.02162626,  -55.47269956,  -43.44985711,   -6.06154948,
+         95.4519503 ,  -40.89112667,  -28.4158923 ,  -27.79957897,
+        141.18546982,  139.96057095,   64.2624934 ]), np.array([  54.1248795 ,  -71.6752295 ,  -22.99511084, -103.02129871,
+          0.8684931 , -113.55180125,  -76.8893616 ,   70.16172702,
+         55.10751883,  -97.30580052,  -28.63692408,   29.664043  ,
+         25.12036177, -104.14226332,   16.64123275,  -38.90410403,
+         76.71797608,  -12.81207861,   22.99548734]), np.array([  54.1248795 ,  -71.6752295 ,  -22.99511084, -103.02129871,
+          0.8684931 , -113.55180125,  -76.8893616 ,   70.16172702,
+         55.10751883,  -97.30580052,  -28.63692408,   29.664043  ,
+         25.12036177, -104.14226332,   16.64123275,  -38.90410403,
+         76.71797608,  -12.81207861,   22.99548734]), np.array([ -69.48035861,   63.83027656,   18.11071919,  -96.40362277,
+        -37.03080592,  105.69332907, -155.30992382,  -27.45091392,
+         81.02162626,  -55.47269956,  -43.44985711,   -6.06154948,
+         95.4519503 ,  -40.89112667,  -28.4158923 ,  -27.79957897,
+        141.18546982,  139.96057095,   64.2624934 ]), np.array([  54.1248795 ,  -71.6752295 ,  -22.99511084, -103.02129871,
+          0.8684931 , -113.55180125,  -76.8893616 ,   70.16172702,
+         55.10751883,  -97.30580052,  -28.63692408,   29.664043  ,
+         25.12036177, -104.14226332,   16.64123275,  -38.90410403,
+         76.71797608,  -12.81207861,   22.99548734]), np.array([ -69.48035861,   63.83027656,   18.11071919,  -96.40362277,
+        -37.03080592,  105.69332907, -155.30992382,  -27.45091392,
+         81.02162626,  -55.47269956,  -43.44985711,   -6.06154948,
+         95.4519503 ,  -40.89112667,  -28.4158923 ,  -27.79957897,
+        141.18546982,  139.96057095,   64.2624934 ]), np.array([  54.1248795 ,  -71.6752295 ,  -22.99511084, -103.02129871,
+          0.8684931 , -113.55180125,  -76.8893616 ,   70.16172702,
+         55.10751883,  -97.30580052,  -28.63692408,   29.664043  ,
+         25.12036177, -104.14226332,   16.64123275,  -38.90410403,
+         76.71797608,  -12.81207861,   22.99548734]), np.array([ -69.48035861,   63.83027656,   18.11071919,  -96.40362277,
+        -37.03080592,  105.69332907, -155.30992382,  -27.45091392,
+         81.02162626,  -55.47269956,  -43.44985711,   -6.06154948,
+         95.4519503 ,  -40.89112667,  -28.4158923 ,  -27.79957897,
+        141.18546982,  139.96057095,   64.2624934 ])]
+
+    for sample in testsuite:
+        subprocess.run('output/pals_STARTPALS_ActiveStandby.ufo.BOUNDED-10.pals', input = bytes(np.vectorize(lambda x: int(x)%256)(sample).tolist()))
+    # inp = bytes([0,0,0,0,0,0,0,0,0,0,254,254,254,0,0,0,0,0,113])
+    # subprocess.run('output/pals_STARTPALS_ActiveStandby.ufo.BOUNDED-10.pals', input = inp)
 
     # time_with_none = 0
     # time_with_19dim = 0
@@ -1193,7 +1278,7 @@ def main():
 
     fuzzer = Fuzzer(**parse_argv_to_fuzzer_kwargs())
     t = fuzzer.get_testsuite()
-    print('testsuite:', t)
+    print('testsuite:\n', t)
     fuzzer.last_report()
     # for program in programs:
         # fuzzer = Fuzzer(None, [0], None, None, program_path = program, max_sample_size = sample_size, input_size = input_size)
