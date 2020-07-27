@@ -1,1 +1,0 @@
-short __VERIFIER_nondet_short();

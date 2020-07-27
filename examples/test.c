@@ -1,8 +1,5 @@
-#include <stdio.h>
-#include <unistd.h>
-#include "__VERIFIER.h"
-
-// extern char __VERIFIER_nondet_char();
+extern short __VERIFIER_nondet_short();
+extern void __VERIFIER_error();
 
 int main() {
     short x = __VERIFIER_nondet_short();
@@ -14,7 +11,7 @@ int main() {
     }
     y += z;
     if (y <= x && x < y + z) {
-        printf("1st max ");
+        // printf("1st max ");
         x += 0;
         x += 0;
         x += 0;
@@ -44,12 +41,12 @@ int main() {
     }
     y += z;
     if (y <= x && x < y + z) {
-        printf("2nd max ");
+        // printf("2nd max ");
         x += 0;
         x += 0;
         x += 0;
         x += 0;
-        x += 0;
+        __VERIFIER_error();
     }
     y += z;
     if (y <= x && x < y + z) {

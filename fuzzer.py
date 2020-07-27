@@ -47,14 +47,14 @@ class _Program:
     ERROR = 100
     SEGMENTATION_FAULT = -11
 
-    DEFAULT_PATHS = {'log' : 'logs/', 'output' : 'output/'}
+    DEFAULT_DIRS = {'log' : 'logs/', 'output' : 'output/'}
 
-    def __init__(self, path, verifier_path = 'verifiers/__VERIFIER.c', verifier_input_path = 'verifiers/__VERIFIER_input_size.c', output_path = DEFAULT_PATHS['output'], log_path = DEFAULT_PATHS['log'], timeout = None):
+    def __init__(self, path, verifier_path = 'verifiers/__VERIFIER.c', verifier_input_path = 'verifiers/__VERIFIER_input_size.c', output_dir = DEFAULT_DIRS['output'], log_dir = DEFAULT_DIRS['log'], timeout = None):
         self.path = path
         self.verifier_path = verifier_path
         self.verifier_input_path = verifier_input_path
-        self.output_path = output_path
-        self.log_path = log_path
+        self.output_dir = output_dir
+        self.log_dir = log_dir
 
         self.pname = [] # *.c   
         for c in reversed(path[:-2]):
@@ -71,11 +71,17 @@ class _Program:
                         10s           ?1.2        ?0.2
           return maxrunningtime - time.time() + self._inittime 
         """
+
     def _init_dirs(self):
-        if not os.path.isdir(self.output_path):
-            os.mkdir(self.output_path)
-        if not os.path.isdir(self.log_path):
-            os.mkdir(self.log_path)
+        if self.output_dir[-1:] != '/':
+            self.output_dir.append('/')
+        if self.log_dir[-1:] != '/':
+            self.log_dir.append('/')
+
+        if not os.path.isdir(self.output_dir):
+            os.mkdir(self.output_dir)
+        if not os.path.isdir(self.log_dir):
+            os.mkdir(self.log_dir)
 
 
     def timeout(self):
@@ -84,17 +90,17 @@ class _Program:
         return None
 
     def _compile_program(self):
-        return subprocess.run(['gcc',self.path , self.verifier_path, '-o', self.output_path + self.pname, '--coverage']).returncode
+        return subprocess.run(['gcc',self.path , self.verifier_path, '-o', self.output_dir + self.pname, '--coverage']).returncode
 
     def _compile_input_size(self):
-        return subprocess.run(['gcc', self.path, self.verifier_input_path, '-o', self.output_path + self.pname + '_input_size']).returncode
+        return subprocess.run(['gcc', self.path, self.verifier_input_path, '-o', self.output_dir + self.pname + '_input_size']).returncode
 
     def get_input_size(self):
         # initialize inputsize.txt
         output = '0'
         with open('inputsize.txt', 'w') as f:
             f.write(output)
-        returncode = subprocess.run(self.output_path + self.pname + '_input_size').returncode
+        returncode = subprocess.run(self.output_dir + self.pname + '_input_size').returncode
         with open('inputsize.txt', 'r') as f:
             output = f.read()
 
@@ -111,14 +117,13 @@ class _Program:
         if os.path.isfile(self.pname + '.gcda'):
             os.remove(self.pname+'.gcda')
         else:
-            print('WARNING: No gcda file at %s!' % self.timeout())
+            print('WARNING: No gcda file at %ss!' % round(_init_time - time.time()))
             # maybe program reached error?
 
     @_timeit
     def _run(self, sample_bytes):
         # outputs/test <- sample_bytes
-        print(self.timeout())
-        return subprocess.run(self.output_path + self.pname, input = sample_bytes, timeout=self.timeout()).returncode
+        return subprocess.run(self.output_dir + self.pname, input = sample_bytes, timeout=self.timeout()).returncode
 
     @_timeit
     def _gcov(self):
@@ -303,7 +308,7 @@ class FuzzerLogger:
 
     def resister(self, fuzzer):
         self._fuzzer = fuzzer
-        self._log_path = fuzzer._program.log_path
+        self._log_path = fuzzer._program.log_dir
         # example: logs/test.txt
         self._filename = self._log_path + fuzzer._program.pname +'.txt'
         # write initial parameters of Fuzzer.
@@ -372,7 +377,7 @@ class Fuzzer:
 
 
     # def __init__(self, function, mean, sigma, options, program_path = 'test.c', sample_size = 1, max_sample_size = 10, resetable = True, max_popsize = 1000, input_size = 1000):
-    def __init__(self, program_path, output_path = _Program.DEFAULT_PATHS['output'], log_path = _Program.DEFAULT_PATHS['log'], max_test = 10, max_popsize = 1000, max_gens = 1000 ,resetable = True, timeout = 15 * 60):
+    def __init__(self, program_path, output_dir = _Program.DEFAULT_DIRS['output'], log_dir = _Program.DEFAULT_DIRS['log'], max_test = 10, max_popsize = 1000, max_gens = 1000 ,resetable = True, timeout = 15 * 60):
         """Fuzzer with cmaes.
 
         Args:
@@ -392,7 +397,7 @@ class Fuzzer:
         self._interrupted = ''
         self._stop_reason = ''
         self._statuses = []
-        self._program = _Program(program_path, output_path = output_path, log_path = log_path, timeout=timeout)
+        self._program = _Program(program_path, output_dir = output_dir, log_dir = log_dir, timeout=timeout)
         self._cmaesoutputer = CMAES_outputer(init_popsize= 7 ,input_size = self._generate_input_size(), max_popsize = max_popsize, max_gens= max_gens) # maybe parameter as dict
         self._logger = FuzzerLogger().resister(self)
         # self._sample_map = {}
@@ -498,7 +503,7 @@ class Fuzzer:
                 self._generations = self._cmaesoutputer.get_generations()
 
                 # print('values:',values )
-                print('fbest:',self._cmaesoutputer._es.result.fbest)
+                # print('fbest:',self._cmaesoutputer._es.result.fbest)
                 # print('iterations:', self._cmaesoutputer.get_generations())
                 # print('evaluations:', es.result.evals_best)
                 # es.tell(solutions, values)
@@ -600,6 +605,10 @@ class Fuzzer:
         self._total_coverage = self._program._cov(gcov)
         self._logger.report_final()
         self._logger.report_time_log()
+        if os.path.isfile('__VERIFIER.gcda'):
+            os.remove('__VERIFIER.gcda')
+        if os.path.isfile(self._program.pname+'.gcda'):
+            os.remove(self._program.pname+'.gcda')
 
 
 # def bytes_to_int(bytes: np.ndarray) -> int:
@@ -1153,13 +1162,13 @@ def main_test():
 
 def parse_argv_to_fuzzer_kwargs():
     argvsize = len(sys.argv)
-    example = 'e.g.: python3 fuzzer.py <program_path> [-op <output_path>] [-lp <log_path>] [-mp <max_popsize>] [-t timeout]'
+    example = 'e.g.: python3 fuzzer.py <program_path> [-od <output_dir>] [-ld <log_dir>] [-mp <max_popsize>] [-t timeout]'
     if argvsize == 1:
         exit('ERROR: No program_path is given!\n' + example)
 
-    commands = {'-op' : 'output_path', '-lp' : 'log_path', '-mp' : 'max_popsize', '-t' : 'timeout'}
+    commands = {'-od' : 'output_dir', '-ld' : 'log_dir', '-mp' : 'max_popsize', '-t' : 'timeout'}
     current_command = None
-    command_type_dict = {'output_path' : str, 'log_path' : str, 'max_popsize' : int, 'timeout' : int}
+    command_type_dict = {'output_dir' : str, 'log_dir' : str, 'max_popsize' : int, 'timeout' : int}
     fuzzer_kwargs = {}
     if argvsize > 1:
         fuzzer_kwargs['program_path'] = sys.argv[1]
