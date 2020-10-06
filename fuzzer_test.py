@@ -4,10 +4,10 @@ import fuzzer
 kwargs = fuzzer.parse_argv_to_fuzzer_kwargs()
 kwargs['log_dir'] = 'logs/fuzzer_test/'
 
-def assert_best_sample_holder_update(sample, best_sample, interrupted):
+def assert_best_sample_holder_has_the_best_sample(sample, best_sample, interrupted):
     if not interrupted and (np.any(sample != best_sample)):
         print(sample, best_sample)
-        exit('Test Failed: given sample is not the same as best sample in sample collector')
+        exit('Test Failed: given sample is not the same as the best sample in sample collector')
 
 def assert_gcov_coverage_matches_calculated_coverage(cov, calculated_cov):
     # return
@@ -27,19 +27,23 @@ def assert_duplicates(sample_holders):
 
 
 class TestSampleCollector(fuzzer.SampleCollector):
-    def save_interesting(self, sample, current_path):
-        super(TestSampleCollector, self).save_interesting(sample, current_path)
+    def __init__(self, fuzzer):
+        super(TestSampleCollector, self).__init__()
+        self.fuzzer = fuzzer
+
+    def check_interesting(self, sample, current_path):
+        super(TestSampleCollector, self).check_interesting(sample, current_path)
         assert_duplicates(self.total_sample_holders)
 
-    def update_best(self, sample, stds, interrupted):
-        assert_best_sample_holder_update(sample, self.best_sample_holder.sample, interrupted)
+    def add_best(self, sample, stds):
+        assert_best_sample_holder_has_the_best_sample(sample, self.best_sample_holder.sample, self.fuzzer._interrupted)
 
-        return super(TestSampleCollector, self).update_best(sample, stds, interrupted)
+        return super(TestSampleCollector, self).add_best(sample, stds)
 
 class TestFuzzer(fuzzer.Fuzzer):
     def __init__(self, **kwargs):
         super(TestFuzzer, self).__init__(**kwargs)
-        self._samplecollector = TestSampleCollector()
+        self._samplecollector = TestSampleCollector(self)
 
     def get_gcov_coverages(self, sample):
         samples = self._samplecollector.get_optimized_samples()

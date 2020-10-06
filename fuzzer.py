@@ -6,6 +6,7 @@ import time
 import sys
 import random
 import argparse
+import csv
 
 _init_time = time.time()
 _time_log = {}
@@ -26,10 +27,13 @@ def _timeit(f):
 
 
 class FuzzerLogger:
+    N_INITIAL = 18
+
     def __init__(self, live = False):
         self._fuzzer = None
-        self._log = dict(seed = None, testcase = 0, popsize = 0, generations = 0, coverage = 0, optimized = False, evaluations = 0 ,time = 0)
+        self._log = dict(fuzzer_state = '', optimized = False, popsize = 0, current_testcase = 0, total_testcase = 0, generations = 0, current_coverage = 0, total_coverage = 0, evaluations = 0 ,time = 0, seed = None)
         self._log_message_lines = []
+        self._csv_lines = []
         self._live = live
         
         """
@@ -50,96 +54,121 @@ class FuzzerLogger:
 
         -----------------------------------------------------------------------------------
         execution time for each method:
-        stop     ask     _run     _gcov_branch     cal_branches     _reset     get_branches_total     get_executed_paths     tell     optimize_sample     optimize_testsuite     
+        stop     ask     _run     _gcov_branch     cal_branches     _reset     get_branches     get_executed_paths     tell     optimize_sample     optimize_testsuite     
         0.0002   0.0206   0.8224   0.7462   0.0133   0.0141   0.7737   0.0019   0.0105   1.6536   1.6538   
         """
+
+    def format_pretty(self, info, n):
+        return "{: <{n}}".format(str(info), n=n)
 
     def resister(self, fuzzer):
         self._fuzzer = fuzzer
         self._log_path = fuzzer._program.log_dir
         self._filename = self._log_path + fuzzer._program.pname +'.txt'
-        initial_parameters = [fuzzer._cmaesbuilder._input_size, fuzzer._cmaesbuilder._max_popsize, fuzzer._cmaesbuilder._popsize_scale, fuzzer._cmaesbuilder._max_gens, fuzzer._cmaesbuilder.max_evaluations, fuzzer._timeout, fuzzer.hot_restart, fuzzer.save_interesting]
-    
+        self._csvname = self._log_path + fuzzer._program.pname + '.csv'
+        
+        initial_parameter_keys = ['no_reset', 'hot_restart', 'save_interesting', 'mode', 'objective', 'input_size', 'max_popsize', 'popsize_scale', 'max_gens', 'max_eval', 'timeout']
+        initial_parameter_values = [fuzzer.no_reset, fuzzer.hot_restart, fuzzer.save_interesting, fuzzer._cma_es.mode['name'], fuzzer.objective.__name__, fuzzer._cma_es._input_size, fuzzer._cma_es._max_popsize, fuzzer._cma_es._popsize_scale, fuzzer._cma_es._max_gens, fuzzer._cma_es.max_evaluations, fuzzer._timeout]
+
+        self._csv_lines.append(list(self._log.keys()))
+
+        self._log_message_lines.append('\nfuzzer args:\n' + ' '.join(sys.argv))
         self._log_message_lines.append('program_path: ' + fuzzer._program.path)
         self._log_message_lines.append('initial parameters:')
-        self._log_message_lines.append('input_size   max_popsize   popsize_scale   max_gens   max_eval   timeout   hot_restart   save_interesting')
-        self._log_message_lines.append(''.join(['   %s       ' % param for param in initial_parameters]))
-        self._log_message_lines.append('\n---------------------------------------------------------------------------------------------------------------')
+        self._log_message_lines.append(''.join([self.format_pretty(key, self.N_INITIAL) for key in initial_parameter_keys]))
+        self._log_message_lines.append(''.join([self.format_pretty(value, self.N_INITIAL) for value in initial_parameter_values]))
+        self._log_message_lines.append('\n-------------------------------------------------------------------------------------------------------------------------------------------------------')
         self._log_message_lines.append('logs:')
-        self._log_message_lines.append(''.join(['%s   ' % key for key in self._log]))
+        self._log_message_lines.append(''.join([self.format_pretty(key, len(key) + 2) for key in self._log]))
 
         if self._live:
             with open(self._filename, 'w') as f:
+                f.write('fuzzer args:\n' + ' '.join(sys.argv) + '\n')
                 f.write('program_path: ' + fuzzer._program.path + '\n')
                 f.write('initial parameters:\n')
-                f.write('input_size   max_popsize   popsize_scale   max_gens   max_eval   timeout   hot_restart   save_interesting\n')
-                f.writelines('   %s       ' % key for key in initial_parameters)
-                f.write('\n---------------------------------------------------------------------------------------------------------------\n')
+                f.writelines(self.format_pretty(key, self.N_INITIAL) for key in initial_parameter_keys)
+                f.write('\n')
+                f.writelines(self.format_pretty(param, self.N_INITIAL) for param in initial_parameter_values)
+                f.write('\n-------------------------------------------------------------------------------------------------------------------------------------------------------\n')
                 f.write('logs:\n')
-                f.writelines("%s   " % key for key in self._log)
+                f.writelines(self.format_pretty(key, len(key) + 2) for key in self._log)
                 f.write('\n')
 
         return self
 
-    def report_changes(self, optimized):
+    def report_changes(self, optimized, state):
         if not self._fuzzer:
             return
 
+        self._log['fuzzer_state'] = state
         self._log['optimized'] = optimized
-        self._log.update(self._fuzzer._cmaesbuilder._current_state())
-        self._log.update(self._fuzzer._current_state())
+        self._log.update(self._fuzzer.get_current_state())
         self._log['time'] = round(self._fuzzer.time(), 2)
 
-        self._log_message_lines.append(''.join(['%s     ' % str(value) for value in self._log.values()]))
+        self._csv_lines.append(list(self._log.values()))
+
+        self._log_message_lines.append(''.join([self.format_pretty(value, len(key) + 2) for key, value in self._log.items()]))
 
         if self._live:
             with open(self._filename, 'a') as f:
-                f.writelines("%s     " % str(item) for item in self._log.values())
+                f.writelines(self.format_pretty(value, len(key) + 2) for key, value in self._log.items())
                 f.write('\n')
     
-    def report_time_log(self):
-        self._log_message_lines.append('\n-----------------------------------------------------------------------------------')
-        self._log_message_lines.append('execution time for each method:')
-        self._log_message_lines.append(''.join(['%s     ' % str(key) for key in _time_log]))
-        self._log_message_lines.append(''.join(['%s   ' % str(round(value,4)) for value in _time_log.values()]))
-
-        if self._live:
-            with open(self._filename, 'a') as f:
-                f.write('\n-----------------------------------------------------------------------------------\n')
-                f.write('execution time for each method:\n')
-                f.writelines('%s     ' % str(key) for key in _time_log)
-                f.write('\n')
-                f.writelines('%s   ' % str(round(item, _Program.COV_DIGITS)) for item in _time_log.values())
-
     def report_final(self):
         final_report = [self._fuzzer._samplecollector.get_total_size(), self._fuzzer.get_total_coverage(), self._fuzzer._stop_reason, self._fuzzer._statuses]
 
-        self._log_message_lines.append('\n-----------------------------------------------------------------------------------')
+        self._log_message_lines.append('\n-------------------------------------------------------------------------------------------------------------------------------------------------------')
         self._log_message_lines.append('final report:')
         self._log_message_lines.append('total_testcase        total_coverage        stop_reason        testcase_statuses')
         self._log_message_lines.append(''.join(['      %s         ' % str(total) for total in final_report]))
 
         if self._live:
             with open(self._filename, 'a') as f:
-                f.write('\n-----------------------------------------------------------------------------------\n')
+                f.write('\n-------------------------------------------------------------------------------------------------------------------------------------------------------\n')
                 f.write('final report:\n')
                 f.write('total_testcase        total_coverage        stop_reason        testcase_statuses\n')
                 f.writelines('      %s         ' % str(total) for total in final_report)
+
+    def report_time_log(self):
+        self._log_message_lines.append('execution time for each method:')
+        self._log_message_lines.append(''.join(['%s     ' % str(key) for key in _time_log]))
+        self._log_message_lines.append(''.join(['%s   ' % str(round(value,4)) for value in _time_log.values()]))
+        self._log_message_lines.append('\n-------------------------------------------------------------------------------------------------------------------------------------------------------')
+
+        if self._live:
+            with open(self._filename, 'a') as f:
+                f.write('execution time for each method:\n')
+                f.writelines('%s     ' % str(key) for key in _time_log)
+                f.write('\n')
+                f.writelines('%s   ' % str(round(item, _Program.COV_DIGITS)) for item in _time_log.values())
+                f.write('\n------------------------------------------------------------------------------------------------------------------------------\n')
 
     def write_logs(self):
         with open(self._filename, 'w') as f:
             f.writelines('%s\n' % message for message in self._log_message_lines)
 
+    def write_csv(self):
+        # exit('csv csv csv')
+        # print(self._csv_lines)
+        # exit()
+        with open(self._csvname, 'w+', newline='') as f:
+        #    write = csv.writer(f)
+           csv.writer(f).writerows(self._csv_lines) 
+
     def print_logs(self):
+        self.write_csv()
         print(*self._log_message_lines, sep='\n')
 
 class _Program:
+    # return codes
     SAFE = 0
     COMPILER_ERROR = 1
     OVER_MAX_INPUT_SIZE = 3
     ASSUME = 10
     ERROR = 100
     SEGMENTATION_FAULT = -11
+
+    MIN_INPUT_SIZE = 2
 
     COV_DIGITS = 2
 
@@ -192,33 +221,17 @@ class _Program:
         return subprocess.run(['gcc', self.path, self.verifier_input_path, '-o', self.output_dir + self.pname + '_input_size']).returncode
 
     def cal_input_size(self):
-        # TODO: read it from console instead of inputsize.txt
-        # initialize inputsize.txt
-        output = ''
-        with open('inputsize.txt', 'w') as f:
-            f.write(output)
-        returncode = subprocess.run(self.output_dir + self.pname + '_input_size').returncode
-        with open('inputsize.txt', 'r') as f:
-            output = f.read()
+        output = subprocess.run(self.output_dir + self.pname + '_input_size', capture_output=True)
+        returncode = output.returncode
+        output = output.stdout.decode()
+        input_size = max(int(output[output.rfind('n') + 1:]), self.MIN_INPUT_SIZE)
 
-        # output = process.stdout.decode()
-        # print('inputsize output',output)
-        # TODO: think what it means for the output to be ''
-        if output == '':
-            output = 0
-        output = int(output)
-        if output < 2:
-            output = 2
-
-        return output, returncode        
+        return input_size, returncode        
 
     @_timeit
-    def _reset(self):
+    def _delete_gcda(self):
         if os.path.isfile(self.pname + '.gcda'):
             os.remove(self.pname+'.gcda')
-        else:
-            print('WARNING: No gcda file at %ss!' % round(_init_time - time.time()))
-            # maybe program reached error?
 
     @_timeit
     def _run(self, input_bytes):
@@ -278,17 +291,17 @@ class _Program:
         return output_branches, total
     
     @_timeit
-    def get_lines_total(self):
+    def get_lines(self):
         gcov = self._gcov('-t')
         lines, total = self.cal_lines(gcov)
-        self._reset()
+        self._delete_gcda()
         return lines, total
 
     @_timeit
-    def get_branches_total(self):
+    def get_branches(self):
         gcov = self._gcov('-b', '-c', '-t')
         branches, total = self.cal_branches(gcov)
-        self._reset()
+        self._delete_gcda()
         return branches, total
 
     def get_line_and_branch_coverages(self):
@@ -307,15 +320,15 @@ class _Program:
             branch_index = index + 3
             line_coverage = float(gcov_lines[line_index][line_offset:].split('%')[0])
             branch_coverage = float(gcov_lines[branch_index][branch_offset:].split('%')[0])
-        self._reset()
+        self._delete_gcda()
         return line_coverage, branch_coverage
 
 
-class CMAES_Builder:
-    DEFAULTS = {'seed' : None, 'mode' : 'bytes', 'init_popsize' : 10, 'max_popsize' : 1000, 'max_gens' : 1000, 'popsize_scale' : 2, 'max_evaluations' : 10 ** 5}
+class CMA_ES:
+    DEFAULTS = {'seed' : None, 'mode' : 'bytes', 'init_popsize' : 10, 'max_popsize' : 1000, 'max_gens' : 1000, 'popsize_scale' : 10, 'max_evaluations' : 10 ** 5}
     MIN_INPUT_SIZE = 2
-    MODES = {'real': {'x0' : [(2**32)/2], 'sigma0' : 0.3*(2**32), 'bounds' : [0,2**32]},
-     'bytes' : {'x0' : [128], 'sigma0' : 0.3*256, 'bounds' : [0, 256]}}
+    MODES = {'real': {'name': 'real', 'x0' : [(2**32)/2], 'sigma0' : 0.3*(2**32), 'bounds' : [0,2**32]},
+     'bytes' : {'name': 'bytes', 'x0' : [128], 'sigma0' : 0.3*256, 'bounds' : [0, 256]}}
 
     def __init__(self, input_size = MIN_INPUT_SIZE, seed = DEFAULTS['seed'], mode = 'bytes', init_popsize = DEFAULTS['init_popsize'], max_popsize = DEFAULTS['max_popsize'],
     max_gens = DEFAULTS['max_gens'], popsize_scale = DEFAULTS['popsize_scale'], max_evaluations = DEFAULTS['max_evaluations']):
@@ -325,23 +338,16 @@ class CMAES_Builder:
         if seed is None:
             seed = random.randint(10, 1000)
         self.seed = seed - 1
-        # random.seed(self.seed)
         self._options = dict(popsize = init_popsize, verb_disp = 0, seed = self.seed, bounds = [self.mode['bounds'][0], self.mode['bounds'][1]])
-        # self._options['seed'] = random.randint(10, 1000) # 157
         self._args = dict(x0 = self.mode['x0'] * self._input_size, sigma0 = self.mode['sigma0'])
-        # self.init_mean()
         self._max_popsize = max_popsize
         self._max_gens = max_gens
-        self._es = None #
-        # self._fbest = 0
-        self._prev_fbest = 0
-        self._optimized = False
+        self._es = None 
         self._init_popsize = init_popsize
-        # self._potential_popsize = init_popsize
         self._popsize_scale = popsize_scale
-        self.result = None
         self.max_evaluations = max_evaluations
         self.evaluations = 0
+        self.result = None
         """A results tuple from `CMAEvolutionStrategy` property ``result``.
 
         This tuple contains in the given position and as attribute
@@ -374,15 +380,15 @@ class CMAES_Builder:
           solution of the last completed iteration in ``pop_sorted``.
 
         """
-    def init_mean(self):
-        minimum, upperbound = self.mode['bounds']
-        x0 = [random.randint(minimum, upperbound - 1) for _ in range(self._input_size)]
-        print(x0)
-        self._args['x0'] = x0
 
     def init_cmaes(self, mean = None, sigma = None, sigmas = None, fixed_variables = None):
+        self._options['seed'] += 1
+
         if mean is  None:
             self._args['x0'] = self.mode['x0'] * self._input_size
+            # lowerbound, upperbound = self.mode['bounds']
+            # random.seed(self._options['seed'])
+            # self._args['x0'] = [random.randrange(lowerbound, upperbound) for _ in range(self._input_size)]
         else:
             self._args['x0'] = mean
         if sigma is None:
@@ -400,9 +406,6 @@ class CMAES_Builder:
         else:
             self._options['fixed_variables'] = fixed_variables
         
-
-        self._options['seed'] += 1
-        self._optimized = False
         self._es = cma.CMAEvolutionStrategy(**self._args, inopts=self._options)
         self.result = self._es.result
         return self
@@ -413,7 +416,6 @@ class CMAES_Builder:
 
     @_timeit
     def ask(self, **kwargs):
-        self.evaluations += self._options['popsize']
         return self._es.ask(**kwargs)
 
     @_timeit
@@ -421,6 +423,7 @@ class CMAES_Builder:
         return self._es.tell(solutions, values)
 
     def update(self):
+        self.evaluations += 1
         self.result = self._es.result
 
     def _reset_popsize(self):
@@ -428,13 +431,8 @@ class CMAES_Builder:
 
 
     def _increase_popsize(self):
-        self._options['popsize'] += 100
+        self._options['popsize'] *= self._popsize_scale
         return self._options['popsize'] <= self._max_popsize
-
-    def _current_state(self):
-        return dict(seed = self._options['seed'],popsize = self._options['popsize'], generations = self.result.iterations, evaluations = self.evaluations)
-
-
 
 
 class _SampleHolder:
@@ -460,97 +458,56 @@ class _SampleHolder:
 
 class SampleCollector:
     def __init__(self, save_interesting = False):
-        self._total_path_length = 0
-        self.total_sample_holders = [] # [sample holder1, sample holder 2, ...
+        self.total_path_size = 0
+        self.total_sample_holders = [] 
         self.total_paths = set()
-        self.optimized_sample_holders = [] # [sample holder1, sample holder 2, ...]
+        self.optimized_sample_holders = []
         self.optimized_paths = set()
-        # self.interesting_sample_holders = []
-        # self.interesting_paths = set()
         self.best_sample_holder = _SampleHolder()
         self.current_coverage = 0
         self.common_path = set()
+        self.save_interesting = save_interesting
+
+    def update(self, sample, current_path, score, total_path_size):
+        self.total_path_size = total_path_size
+        sample_holder = self.best_sample_holder
+        if sample_holder.update(sample, current_path, score) or self.save_interesting:
+            self.current_coverage = round(100 * sample_holder.score / self.total_path_size, _Program.COV_DIGITS)
+            total_score = len(current_path | self.total_paths)
+            self.total_coverage = round(100 * total_score / self.total_path_size, _Program.COV_DIGITS)
 
     @_timeit
-    def get_executed_paths(self, sample, current_path, total, save_interesting = False):
-        self._total_path_length = total
-        output_path = self.optimized_paths | current_path
-        self.best_sample_holder.update(sample, current_path, len(output_path))
+    def get_executed_paths(self, sample, current_path, total_path_size):
+        if self.save_interesting:
+            self.check_interesting(sample, current_path)
 
-        if save_interesting:
-            self.save_interesting(sample, current_path)
+        output_path = self.optimized_paths | current_path
+        self.update(sample, current_path, len(output_path), total_path_size)
 
         return output_path        
 
     @_timeit
-    def save_interesting(self, sample, current_path): # TODO: refactor total -> interesting
-        pre_interesting_score = len(self.total_paths)
+    def check_interesting(self, sample, current_path):
+        pre_score = len(self.total_paths)
         self.total_paths.update(current_path)
-        current_interesting_score = len(self.total_paths)
-        is_interesting = pre_interesting_score < current_interesting_score
-        # TODO: compare optimized paths with current path? => lesser total samples
+        current_score = len(self.total_paths)
+        is_interesting = pre_score < current_score
+
         if is_interesting:
             self.total_sample_holders.append(_SampleHolder(sample, current_path))
-
-            # self.total_paths = self.total_paths
-            # self.total_sample_holders = self.interesting_sample_holders
-            
-        # remove uninteresting samples from interesting samples if the given sampel is interesting
-            # interesting_sample_holders = []
-            # for sample_holder in self.interesting_sample_holders:
-            #     # if sample_holder path is 
-            #     if len(sample_holder.path) >= len(current_path) or not sample_holder.path.issubset(current_path):
-            #         # if not sample_holder.path.issubset(self.optimized_paths):
-            #         interesting_sample_holders.append(sample_holder)
-
-            #         # if interesting and current_path.issubset(sample_holder.path):
-            #         #     interesting = False
-            # # if interesting:
-            # interesting_sample_holders.append(_SampleHolder(sample, current_path))
-            # self.interesting_sample_holders = interesting_sample_holders
-                
-            
-        # if len(output_path) > len(self.optimized_paths):
-            # # if not output_path.issubset(self.optimized_paths):
-            #     interesting = True
-            #     reduced_samples = []
-            #     # eliminate all samples with path that are real subset of the given path / minimize interesting samples
-            #     for prev_sample in self.total_samples:
-            #         # if len(prev_sample.path) > len(output_path) or len(prev_sample.path) == len(output_path) and not output_path.issubset(prev_sample.path) or not prev_sample.path.issubset(output_path):
-            #         # if output_path == prev_sample.path or not prev_sample.path.issubset(output_path):
-            #         if len(prev_sample.path) >= len(output_path) or not prev_sample.path.issubset(output_path):
-            #             reduced_samples.append(prev_sample)
-            #         # if not prev_sample.path.issubset(output_path):
-            #             # reduced_samples.append(prev_sample)
-            #             if interesting and output_path.issubset(prev_sample.path):
-            #                 interesting = False
-            #     # if len(self.total_samples) > len(reduced_samples):
-            #     #     print('!!!!!reduced', len(self.total_samples), len(reduced_samples))
-            #     self.total_samples = reduced_samples
-
-            #     # add the given sample only if the given sample was interesting
-            #     if interesting:
-            #         self.total_samples.append(_SampleHolder(sample, output_path))
-            #         # print('path:')
-            #         # for prev_sample in self.total_samples:
-            #         #     print(prev_sample.path)
-        # self.total_paths.update(current_path)
 
     def is_optimized(self):
         return len(self.optimized_paths) < len(self.best_sample_holder.path)
 
-    def update_best(self, sample, stds, interrupted):
-        # if sample is not None and not interrupted and (np.any(sample != self.best_sample_holder.sample)):
-        #     exit('Test Failed: given sample is not the same as best sample in sample collector')
+    def add_best(self, sample, stds):
         sample = self.best_sample_holder.sample
         path = self.best_sample_holder.path
             
-        # score
-        pre_len = len(self.optimized_paths)
+        pre_score = len(self.optimized_paths)
         self.optimized_paths.update(path)
-        optimized = pre_len < len(self.optimized_paths)
+        optimized = pre_score < len(self.optimized_paths)
 
-        if interrupted or optimized:
+        if optimized:
             self.optimized_sample_holders.append(_SampleHolder(sample, path, stds = stds))
             if not self.save_interesting:
                 self.total_sample_holders.append(_SampleHolder(sample, path, stds = stds))
@@ -560,17 +517,17 @@ class SampleCollector:
 
         return optimized
 
-    def remove_common_path(self):
+    def remove_common_paths(self):
         if len(self.optimized_paths) == 0:
             return
-        common_path = set.intersection(*[sample.path for sample in self.optimized_sample_holders])
-        self.optimized_paths -= common_path
+        common_paths = set.intersection(*[sample.path for sample in self.optimized_sample_holders])
+        self.optimized_paths -= common_paths
 
     def reset_optimized(self):
         self.optimized_sample_holders = []
         self.optimized_paths = set()
-        self.current_coverage = 0
         self.best_sample_holder = _SampleHolder()
+        self.current_coverage = 0
 
     def pop_first_optimum_holder(self):
         if len(self.optimized_sample_holders) == 0:
@@ -584,19 +541,14 @@ class SampleCollector:
             self.optimized_paths.update(holder.path)
         return sample_holder
 
-    def coverage(self):
-        if self.current_coverage > 0:
-            return self.current_coverage
-            
-        if self._total_path_length == 0:
-            return 0
-        return round(100 * len(self.optimized_paths) / self._total_path_length, _Program.COV_DIGITS)
+    def get_current_coverage(self):
+        return self.current_coverage
 
-    def total_coverage(self):
-        if self._total_path_length == 0:
+    def get_total_coverage(self):
+        if self.total_path_size == 0:
             return 0
 
-        return round(100 * len(self.total_paths)/ self._total_path_length, _Program.COV_DIGITS)
+        return self.total_coverage
 
     def get_optimized_samples(self):
         return [s.sample for s in self.optimized_sample_holders]
@@ -604,18 +556,32 @@ class SampleCollector:
     def get_total_samples(self):
         return [s.sample for s in self.total_sample_holders]
 
+    def cal_size(self, size):
+        if self.best_sample_holder.sample is not None:
+            size += 1
+        return size
+
+    def get_current_size(self):
+        return self.cal_size(len(self.optimized_sample_holders))
+
     def get_total_size(self):
-        return len(self.total_sample_holders)
+        size = len(self.total_sample_holders)
+        if self.save_interesting:
+            return size
+        return self.cal_size(size)
+
 
 
 class Fuzzer:
-    DEFAULTS = {'timeout' : 14 * 60, 'mode' : 'bytes', 'objective' : 'branch'}
+    DEFAULTS = {'timeout' : 14 * 60, 'mode' : 'bytes', 'objective' : 'branch', 'hot_restart_threshold' : 25}
     VERIFIER_ERROS = {_Program.SAFE : 'SAFE', _Program.ERROR : 'ERROR', _Program.ASSUME : 'ASSUME_ERROR'}
+    PARSING_SCALE = 2 ** (32 - 8)
+    UNSIGNED_INT_MIN = 0
+    UNSIGNED_INT_MAX = 2 ** 32 - 1
 
-    # def __init__(self, function, mean, sigma, options, program_path = 'test.c', sample_size = 1, max_sample_size = 10, resetable = True, max_popsize = 1000, input_size = 1000):
-    def __init__(self, program_path, live_logs = False, hot_restart = False, save_interesting = False, mode = DEFAULTS['mode'], objective = DEFAULTS['objective'],  timeout = DEFAULTS['timeout'], 
-    output_dir = _Program.DEFAULT_DIRS['output'], log_dir = _Program.DEFAULT_DIRS['log'], seed = CMAES_Builder.DEFAULTS['seed'], init_popsize = CMAES_Builder.DEFAULTS['init_popsize'],
-    max_popsize = CMAES_Builder.DEFAULTS['max_popsize'], max_gens = CMAES_Builder.DEFAULTS['max_gens'], max_evaluations = CMAES_Builder.DEFAULTS['max_evaluations'], popsize_scale = CMAES_Builder.DEFAULTS['popsize_scale']):
+    def __init__(self, program_path, no_reset = False, live_logs = False, hot_restart = False, save_interesting = False, mode = DEFAULTS['mode'], objective = DEFAULTS['objective'],  timeout = DEFAULTS['timeout'],  hot_restart_threshold = DEFAULTS['hot_restart_threshold'],
+    output_dir = _Program.DEFAULT_DIRS['output'], log_dir = _Program.DEFAULT_DIRS['log'], seed = CMA_ES.DEFAULTS['seed'], init_popsize = CMA_ES.DEFAULTS['init_popsize'],
+    max_popsize = CMA_ES.DEFAULTS['max_popsize'], max_gens = CMA_ES.DEFAULTS['max_gens'], max_evaluations = CMA_ES.DEFAULTS['max_evaluations'], popsize_scale = CMA_ES.DEFAULTS['popsize_scale']):
         """Fuzzer with cmaes.
 
         Args:
@@ -627,14 +593,16 @@ class Fuzzer:
         self._stop_reason = ''
         self._statuses = []
 
-        self.objective = self._select_obejctive(objective)
-        self.encode = self._select_encode(mode)
+        self.no_reset = no_reset
         self.hot_restart = hot_restart
         self.save_interesting = save_interesting
+        self.hot_restart_threshold = hot_restart_threshold
 
+        self.objective = self._select_obejctive(objective)
+        self.encode = self._select_encode(mode)
         self._program = _Program(program_path, output_dir = output_dir, log_dir = log_dir, timeout=timeout, mode = mode)
-        self._cmaesbuilder = CMAES_Builder(seed = seed, init_popsize= init_popsize ,input_size = self._generate_input_size(), max_popsize = max_popsize, max_gens= max_gens, popsize_scale = popsize_scale,mode = mode, max_evaluations=max_evaluations) # maybe parameter as dict
-        self._samplecollector = SampleCollector()
+        self._cma_es = CMA_ES(seed = seed, init_popsize= init_popsize ,input_size = self._generate_input_size(), max_popsize = max_popsize, max_gens= max_gens, popsize_scale = popsize_scale,mode = mode, max_evaluations=max_evaluations) # maybe parameter as dict
+        self._samplecollector = SampleCollector(save_interesting)
         self._logger = FuzzerLogger(live_logs).resister(self)
 
     def _select_obejctive(self, objective):
@@ -649,9 +617,9 @@ class Fuzzer:
         if mode == 'real':
             return self._encode_real
         elif mode == 'bytes':
-            return self._encode
+            return self._encode_bytes
         else:
-            return self._encode
+            return self._encode_bytes
 
     def _check_compile_error(self, returncode):
         if returncode == _Program.COMPILER_ERROR:
@@ -674,15 +642,18 @@ class Fuzzer:
         self._check_compile_error(self._program._compile_input_size())
         input_size, returncode = self._program.cal_input_size()
         self._check_runtime_error(returncode)
-        if input_size < CMAES_Builder.MIN_INPUT_SIZE:
-            exit('ERROR: input_size: ' + str(input_size) + ', Input size must be greater than ' + str(CMAES_Builder.MIN_INPUT_SIZE) + '!')
+        if input_size < CMA_ES.MIN_INPUT_SIZE:
+            exit('ERROR: input_size: ' + str(input_size) + ', Input size must be greater than ' + str(CMA_ES.MIN_INPUT_SIZE) + '!')
         return input_size
 
     def get_current_coverage(self):
-        return self._samplecollector.coverage()
+        return self._samplecollector.get_current_coverage()
 
     def get_total_coverage(self):
-        return self._samplecollector.total_coverage()
+        return self._samplecollector.get_total_coverage()
+
+    def get_optimized_samples(self):
+        return self._samplecollector.get_optimized_samples()
 
     def get_total_samples(self):
         return self._samplecollector.get_total_samples()
@@ -691,26 +662,16 @@ class Fuzzer:
         self._samplecollector.reset_optimized()
 
     def _encode_real(self, sample):
-        def parseToFeasible(x):
-            result = int(min(max(x,0),256) * ((2**32) / (2 ** 8)))
-            if result >= 2**32:
-                result -=1
-            return result
-
-        out = b''
-        for input_comp in sample:
-            out += parseToFeasible(input_comp).to_bytes(4, 'little', signed = False)
+        parse_to_feasible = lambda x: int(min(max(x * self.PARSING_SCALE, self.UNSIGNED_INT_MIN), self.UNSIGNED_INT_MAX))
+        out = bytearray()
+        for sample_comp in sample:
+            out += parse_to_feasible(sample_comp).to_bytes(4, 'little', signed = False)
         return out
 
-    def _encode(self, sample: np.ndarray):
-        def parseToFeasible(x):
-            if x < 0:
-                return 0
-            if x >=256:
-                return 255
-            return int(x)
-            
-        out = bytes(np.frompyfunc(parseToFeasible,1,1)(sample).tolist())
+    def _encode_bytes(self, sample: np.ndarray):
+        lowerbound, upperbound = self._cma_es.mode['bounds']
+        parse_to_feasible = lambda x: int(min(max(x, lowerbound), upperbound))
+        out = bytearray(np.frompyfunc(parse_to_feasible, 1, 1)(sample).tolist())
         return out
 
     def _run_sample(self, sample, returncode_check = False):
@@ -726,7 +687,7 @@ class Fuzzer:
     
     def penalize(self, input_vector):
         penalty = 0
-        minimum, upperbound = self._cmaesbuilder.mode['bounds']
+        minimum, upperbound = self._cma_es.mode['bounds']
         for input_component in input_vector:
             if input_component < minimum:
                 penalty += abs(input_component)
@@ -737,90 +698,109 @@ class Fuzzer:
 
     def _f_line(self, sample):
         self._run_sample(sample)
-        lines, total = self._program.get_lines_total() # independently executed lines from sample, total number of lines
+        lines, n = self._program.get_lines() # independently executed lines from sample, total number of lines
         # penalty = self.penalize(sample)
-        lines = self._samplecollector.get_executed_paths(sample, lines, total, self.save_interesting)
+        lines = self._samplecollector.get_executed_paths(sample, lines, n)
 
-        return -round(100 * len(lines)/total, _Program.COV_DIGITS)
+        return -round(100 * len(lines)/n, _Program.COV_DIGITS)
 
     def _f_branch(self, sample):
         self._run_sample(sample)
-        branches, total = self._program.get_branches_total() # independently executed lines from sample, total number of lines
+        branches, n = self._program.get_branches() # independently executed branches from sample, total number of branches
         # penalty = self.penalize(sample)
-        branches = self._samplecollector.get_executed_paths(sample, branches, total, self.save_interesting)
+        branches = self._samplecollector.get_executed_paths(sample, branches, n)
 
-        return -round(100 * len(branches)/total, _Program.COV_DIGITS)
+        return -round(100 * len(branches)/n, _Program.COV_DIGITS)
+        # return -len(branches)
     
-    def _current_state(self):
-        return dict(testcase = (len(self._samplecollector.optimized_sample_holders), self._samplecollector.get_total_size()),
-         coverage = (self.get_current_coverage(), self.get_total_coverage()))
+    def get_current_state(self):
+        return dict(current_testcase = self._samplecollector.get_current_size(), total_testcase =  self._samplecollector.get_total_size(),
+         current_coverage = self.get_current_coverage(), total_coverage = self.get_total_coverage(),
+         seed = self._cma_es._options['seed'],popsize = self._cma_es._options['popsize'], generations = self._cma_es.result.iterations, evaluations = self._cma_es.evaluations)
 
     def _stop(self):
         if self._interrupted:
             self._stop_reason = self._interrupted
         elif self.get_total_coverage() == 100 or self.get_current_coverage() == 100:
             self._stop_reason = 'coverage is 100%'
-        elif self._cmaesbuilder.evaluations > self._cmaesbuilder.max_evaluations:
+        elif self._cma_es.evaluations > self._cma_es.max_evaluations:
             self._stop_reason = 'evaluations is over max_evaluations' 
         return self._stop_reason
 
     def time(self):
         return time.time() - _init_time
 
+    def check_optimized(self, sample, check):
+        try:
+            prev_current_cov = self.get_current_coverage()
+            prev_total_cov = self.get_total_coverage()
+            value = self.objective(sample)
+        except (subprocess.TimeoutExpired,  KeyboardInterrupt) as e:
+            raise e
+        finally:
+            self._cma_es.update()
+            if check and (prev_current_cov < self.get_current_coverage() or self.save_interesting and prev_total_cov < self.get_total_coverage()):
+                self._logger.report_changes('-', state = 'optimizing')
+
+        return value
+
+    def sample_until_interesting_found(self, number, score, check):
+        es = self._cma_es
+        samples = []
+        values = []
+
+        while len(samples) <= number and score >= self._samplecollector.best_sample_holder.score:
+            extra_samples = es.ask()
+            samples += extra_samples
+            values += [self.check_optimized(sample, check) for sample in extra_samples]
+            if self._cma_es.evaluations > self._cma_es.max_evaluations:
+                break
+
+        return samples, values
+
     @_timeit
-    def optimize_sample(self, number = 0, score = 0, mean = None, sigma = None, sigmas = None, fixed_variables = None):
-        mute = False
-        es = self._cmaesbuilder.init_cmaes(mean, sigma, sigmas, fixed_variables)
+    def optimize_sample(self, number = 0, score = 0, mean = None, sigma = None, sigmas = None, fixed_variables = None, check = True):
+        # mute = True
+        es = self._cma_es.init_cmaes(mean, sigma, sigmas, fixed_variables)
         while not es.stop():
             try:
-                solutions = es.ask()
-                values = [self.objective(x) for x in solutions]
-                sample_score = -es.result.fbest
-
-                while len(solutions) <= number and score >= sample_score:
-                    extra_solutions = es.ask()
-                    solutions += extra_solutions
-                    values += [self.objective(x) for x in extra_solutions]
-                    if self._cmaesbuilder.evaluations > self._cmaesbuilder.max_evaluations:
-                        break
-                es.tell(solutions, values)
+                samples = es.ask()
+                values = [self.check_optimized(sample, check) for sample in samples]
+                # extra_samples, extra_values = self.sample_until_interesting_found(number, score, check = check)
+                es.tell(samples, values)
                 es.update()
-                if mute:
-                    continue
-                # print('!!!!!!!!solutions:\n', len(solutions),':', solutions)
-                print('!!!!!!!!evals:\n', es.result.evaluations)
-                print('!!!!!!!!values:\n', values)
-                print('!!!!!!!!means:\n',es.result.xfavorite)
-                print('!!!!!!!!bestx:\n',es.result.xbest)
-                print('!!!!!!!!bestf:\n',es.result.fbest)
-                print('!!!!!!!!stds:\n',es.result.stds)
-                # print('!!!!!!!!solutions:\ns', values)
 
-                # print('!!!!!!!!stds:\n',es._es.result.stds)
-                # if len(solutions) >= es._max_popsize:
-                    # break
+                # if mute:
+                #     continue
+                # print('----------------------------------')
+                # print('samples:\ns', samples)
+                # print('iter:\n', es.result.iterations)
+                # print('evals:\n', es.result.evaluations)
+                # print('values:\n', values)
+                # print('means:\n',es.result.xfavorite)
+                # print('bestx:\n',es.result.xbest)
+                # print('bestf:\n',es.result.fbest)
+                # print('stds:\n',es.result.stds)
 
             except (subprocess.TimeoutExpired,  KeyboardInterrupt) as e:
                 self._interrupted = e.__class__.__name__
-                self._program._reset()
+                self._program._delete_gcda()
                 break
-        print('!!!!!!!!means:\n',es.result.xfavorite)
-        print('!!!!!!!!bestx:\n',es.result.xbest)
-        print('!!!!!!!!stds:\n',es.result.stds)
-        print()
-        return self._samplecollector.update_best(es.result.xbest, es.result.stds, self._interrupted)
+
+        return self._samplecollector.add_best(es.result.xbest, es.result.stds)
     
-    def extract_mean_sigmas(self, sample_holder):
+    def extract_mean_sigmas_for_hot_restart(self, sample_holder):
         mean = []
         sigmas = []
-        stds_mean = sum(sample_holder.stds)/len(sample_holder.stds)
-        _, upperbound = self._cmaesbuilder.mode['bounds']
+        # stds_mean = sum(sample_holder.stds)/len(sample_holder.stds)
+        lowerbound, upperbound = self._cma_es.mode['bounds']
 
         for i, std in enumerate(sample_holder.stds):
-            # if std >= upperbound or std >= self._cmaesbuilder.mode['sigma0']:
-            if std >= upperbound or std >= stds_mean:
-                mean.append(self._cmaesbuilder.mode['x0'][0])
-                sigmas.append(self._cmaesbuilder.mode['sigma0'])
+            # if std >= upperbound or std > stds_mean:
+            if std >= upperbound or std > self.hot_restart_threshold:
+                mean.append(self._cma_es.mode['x0'][0])
+                # mean.append(random.randrange(lowerbound, upperbound))
+                sigmas.append(self._cma_es.mode['sigma0'])
             else:
                 mean.append(sample_holder.sample[i])
                 sigmas.append(std)
@@ -831,37 +811,49 @@ class Fuzzer:
     def optimize_testsuite_with_hot_restart(self):
         number_of_hot_restarts = len(self._samplecollector.optimized_sample_holders)
         optimized = False
+        pre_seed = self._cma_es._options['seed']
         while number_of_hot_restarts > 0 and not self._stop():
             if not optimized:
-                mean, sigmas = self.extract_mean_sigmas(self._samplecollector.pop_first_optimum_holder())
+                mean, sigmas = self.extract_mean_sigmas_for_hot_restart(self._samplecollector.pop_first_optimum_holder())
 
-            optimized = self.optimize_sample(mean = mean, sigmas = sigmas)
+            optimized = self.optimize_sample(mean = mean, sigmas = sigmas, check = False)
             # optimized = self.optimize_sample(mean = mean, sigmas = sigmas, number=1000, score=self.get_total_coverage())
-            self._logger.report_changes(str('hot')+str(optimized))
+            self._logger.report_changes(optimized, state = 'hot_restart')
 
             # count the number down only if not optimized, otherwise try to optimize with the previous mean and sigmas
             if not optimized:
                 number_of_hot_restarts -= 1
 
+        # to observe the independent effect of hot restart
+        self._cma_es._options['seed'] = pre_seed
+
     @_timeit
     def optimize_testsuite(self):
+        optimized = False
         while not self._stop():
             # optimized = self.optimize_sample(number = 1000, score = self.get_current_coverage())
             # optimized = self.optimize_sample(number = 1000, score = self.get_total_coverage())
+            prev_optimized = optimized
             optimized = self.optimize_sample()
-            self._logger.report_changes(optimized)
+            self._logger.report_changes(optimized, state = 'done')
+
             if not optimized:
-                if self.hot_restart:
+                if self.hot_restart and prev_optimized:
                     self.optimize_testsuite_with_hot_restart()
-                if not self._cmaesbuilder._increase_popsize():
-                    self._cmaesbuilder._reset_popsize()
-                self._reset()
+                if not self._cma_es._increase_popsize():
+                    self._cma_es._reset_popsize()
+                if not self.no_reset:
+                    self._reset()
 
     def generate_testsuite(self):
         self._program._compile_program()
         self.optimize_testsuite()
         self._program._timeout = None
-        return self.get_total_samples()
+        # return self.get_total_samples()
+        return self.parse_total_samples_to_input_vectors()
+
+    def parse_total_samples_to_input_vectors(self):
+        return [self.encode(sample) for sample in self.get_total_samples()]            
 
     def last_report(self):
         if os.path.isfile(self._program.pname+'.gcda'):
@@ -875,13 +867,12 @@ class Fuzzer:
         self._logger.report_time_log()
         self._logger.print_logs()
 
-        print('optimized testsuite:', self._samplecollector.get_optimized_samples)
-        print('testsuite:', total_samples)
         print('total sample len:', len(total_samples))
+        print('total samples:', total_samples)
+        print('total input vectors:', self.parse_total_samples_to_input_vectors())
         print('line_coverage:', round(line/100, _Program.COV_DIGITS))
         print('branch_coverage:', round(branch/100,_Program.COV_DIGITS))
-        print('total_eval:', self._cmaesbuilder.evaluations)
-
+        print('total_eval:', self._cma_es.evaluations)
 
 def parse_argv_to_fuzzer_kwargs():
     arg_parser = argparse.ArgumentParser()
@@ -889,30 +880,37 @@ def parse_argv_to_fuzzer_kwargs():
         help = 'directory for complied and executable programs')
     arg_parser.add_argument('-ld', '--log_dir', type = str, default =_Program.DEFAULT_DIRS['log'],
         help = 'directory for logs')
-    arg_parser.add_argument('-ip', '--init_popsize', type = int, default = CMAES_Builder.DEFAULTS['init_popsize'],
+    arg_parser.add_argument('-ip', '--init_popsize', type = int, default = CMA_ES.DEFAULTS['init_popsize'],
         help = 'initial population size for CMA-ES to start with')
-    arg_parser.add_argument('-mp', '--max_popsize', type = int, default = CMAES_Builder.DEFAULTS['max_popsize'],
+    arg_parser.add_argument('-mp', '--max_popsize', type = int, default = CMA_ES.DEFAULTS['max_popsize'],
         help = 'maximum population size for CMA-ES')
-    arg_parser.add_argument('-m', '--mode', type = str, default = CMAES_Builder.DEFAULTS['mode'],
+    arg_parser.add_argument('-m', '--mode', type = str, default = CMA_ES.DEFAULTS['mode'],
         help = 'type of input vectors that CMA-ES-Fuzzer work with')
-    arg_parser.add_argument('-me', '--max_evaluations', type = int, default = CMAES_Builder.DEFAULTS['max_evaluations'],
+    arg_parser.add_argument('-me', '--max_evaluations', type = int, default = CMA_ES.DEFAULTS['max_evaluations'],
         help = 'maximum evaluations for CMA-ES-Fuzzer')
-    arg_parser.add_argument('-s', '--seed', type = int, default = CMAES_Builder.DEFAULTS['seed'],
+    arg_parser.add_argument('-s', '--seed', type = int, default = CMA_ES.DEFAULTS['seed'],
         help = 'seed to control the randomness')
     arg_parser.add_argument('-t', '--timeout', type = int, default = Fuzzer.DEFAULTS['timeout'],
         help = 'timeout in seconds')
     arg_parser.add_argument('-o', '--objective', type = str, default = Fuzzer.DEFAULTS['objective'],
         help = 'type of objective function for CMA-ES-Fuzzer')
+    arg_parser.add_argument('-hrt', '--hot_restart_threshold', type = int, default = Fuzzer.DEFAULTS['hot_restart_threshold'],
+        help = 'threshold for the optimized sigma vector to decide whether their components, among mean vector components, are reset to default for the hot restart.')
+    arg_parser.add_argument('-nr', '--no_reset', action = 'store_true',
+        help = 'deactivate reset after not optimized (this is for the most basic version)')
     arg_parser.add_argument('-hr', '--hot_restart', action = 'store_true',
         help = 'activate hot restart while optimizing input vectors')
     arg_parser.add_argument('-si', '--save_interesting', action = 'store_true',
         help = 'save interesting paths while optimizing')
     arg_parser.add_argument('-ll', '--live_logs', action = 'store_true',
         help = 'write logs in log files whenever it changes')
-    arg_parser.add_argument('program_path', type = str,
+    arg_parser.add_argument('program_path', nargs = '+' ,type = str,
         help = 'reletive program path to test')
-    args = arg_parser.parse_known_args()
-    return vars(args[0])
+
+    args= arg_parser.parse_known_args()[0]
+    args.program_path = args.program_path[-1]
+
+    return vars(args)
 
 def main():
     kwargs = parse_argv_to_fuzzer_kwargs()
