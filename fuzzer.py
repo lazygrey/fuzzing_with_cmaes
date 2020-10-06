@@ -30,7 +30,7 @@ class FuzzerLogger:
 
     def __init__(self, live = False):
         self._fuzzer = None
-        self._log = dict(fuzzer_state = '', optimized = False, popsize = 0, current_testcase = 0, total_testcase = 0, generations = 0, current_coverage = 0, total_coverage = 0, evaluations = 0 ,time = 0, seed = None)
+        self._log = dict(fuzzer_state = '', optimized = False, popsize = 0, current_testcase = 0, total_testcase = 0, generations = 0, current_coverage = 0, total_coverage = 0, evaluations = 0 ,time = 0, CMA_ES_seed = None)
         self._log_message_lines = []
         self._csv_lines = []
         self._live = live
@@ -45,16 +45,16 @@ class FuzzerLogger:
         self._csvname = self._log_path + fuzzer._program.pname + '.csv'
         
         initial_parameter_keys = ['no_reset', 'hot_restart', 'save_interesting', 'mode', 'objective', 'input_size', 'max_popsize', 'popsize_scale', 'max_gens', 'max_eval', 'timeout', 'seed']
-        initial_parameter_values = [fuzzer.no_reset, fuzzer.hot_restart, fuzzer.save_interesting, fuzzer._cma_es.mode['name'], fuzzer.objective.__name__, fuzzer._cma_es._input_size, fuzzer._cma_es._max_popsize, fuzzer._cma_es._popsize_scale, fuzzer._cma_es._max_gens, fuzzer._cma_es.max_evaluations, fuzzer._timeout, fuzzer.seed]
+        initial_parameter_values = [fuzzer.no_reset, fuzzer.hot_restart, fuzzer.save_interesting, fuzzer._cma_es.mode['name'], fuzzer.objective_name, fuzzer._cma_es._input_size, fuzzer._cma_es._max_popsize, fuzzer._cma_es._popsize_scale, fuzzer._cma_es._max_gens, fuzzer._cma_es.max_evaluations, fuzzer._timeout, fuzzer._cma_es.seed]
 
         self._csv_lines.append(list(self._log.keys()))
 
         self._log_message_lines.append('\nfuzzer args:\n' + ' '.join(sys.argv))
         self._log_message_lines.append('program_path: ' + fuzzer._program.path)
         self._log_message_lines.append('initial parameters:')
-        self._log_message_lines.append(''.join([self.format_pretty(key, self.N_INITIAL) for key in initial_parameter_keys]))
-        self._log_message_lines.append(''.join([self.format_pretty(value, self.N_INITIAL) for value in initial_parameter_values]))
-        self._log_message_lines.append('\n-------------------------------------------------------------------------------------------------------------------------------------------------------')
+        self._log_message_lines.append(''.join([self.format_pretty(key, len(key) + 2) for key in initial_parameter_keys]))
+        self._log_message_lines.append(''.join([self.format_pretty(value, len(initial_parameter_keys[i]) + 2) for i, value in enumerate(initial_parameter_values)]))
+        self._log_message_lines.append('\n-------------------------------------------------------------------------------------------------------------------------------------------')
         self._log_message_lines.append('logs:')
         self._log_message_lines.append(''.join([self.format_pretty(key, len(key) + 2) for key in self._log]))
 
@@ -65,8 +65,8 @@ class FuzzerLogger:
                 f.write('initial parameters:\n')
                 f.writelines(self.format_pretty(key, self.N_INITIAL) for key in initial_parameter_keys)
                 f.write('\n')
-                f.writelines(self.format_pretty(param, self.N_INITIAL) for param in initial_parameter_values)
-                f.write('\n-------------------------------------------------------------------------------------------------------------------------------------------------------\n')
+                f.writelines(self.format_pretty(value, len(initial_parameter_keys[i]) + 2) for i, value in enumerate(initial_parameter_values))
+                f.write('\n-------------------------------------------------------------------------------------------------------------------------------------------\n')
                 f.write('logs:\n')
                 f.writelines(self.format_pretty(key, len(key) + 2) for key in self._log)
                 f.write('\n')
@@ -94,30 +94,32 @@ class FuzzerLogger:
     def report_final(self):
         final_report = [self._fuzzer._samplecollector.get_total_size(), self._fuzzer.get_total_coverage(), self._fuzzer._stop_reason, self._fuzzer._statuses]
 
-        self._log_message_lines.append('\n-------------------------------------------------------------------------------------------------------------------------------------------------------')
+        self._log_message_lines.append('\n-------------------------------------------------------------------------------------------------------------------------------------------')
         self._log_message_lines.append('final report:')
         self._log_message_lines.append('total_testcase        total_coverage        stop_reason        testcase_statuses')
         self._log_message_lines.append(''.join(['      %s         ' % str(total) for total in final_report]))
 
         if self._live:
             with open(self._filename, 'a') as f:
-                f.write('\n-------------------------------------------------------------------------------------------------------------------------------------------------------\n')
+                f.write('\n-------------------------------------------------------------------------------------------------------------------------------------------\n')
                 f.write('final report:\n')
                 f.write('total_testcase        total_coverage        stop_reason        testcase_statuses\n')
                 f.writelines('      %s         ' % str(total) for total in final_report)
 
     def report_time_log(self):
+        time_log = {k: v for k, v in sorted(_time_log.items(), key=lambda item: item[1])}
+
         self._log_message_lines.append('execution time for each method:')
-        self._log_message_lines.append(''.join(['%s     ' % str(key) for key in _time_log]))
-        self._log_message_lines.append(''.join(['%s   ' % str(round(value,4)) for value in _time_log.values()]))
-        self._log_message_lines.append('\n-------------------------------------------------------------------------------------------------------------------------------------------------------')
+        self._log_message_lines.append(''.join([self.format_pretty(key, max(len(key),6) + 2) for key, value in time_log.items()]))
+        self._log_message_lines.append(''.join([self.format_pretty(round(value,4), max(len(key),6) + 2) for key, value in time_log.items()]))
+        self._log_message_lines.append('\n-------------------------------------------------------------------------------------------------------------------------------------------')
 
         if self._live:
             with open(self._filename, 'a') as f:
                 f.write('execution time for each method:\n')
-                f.writelines('%s     ' % str(key) for key in _time_log)
+                f.writelines(self.format_pretty(key, max(len(key), 6) + 2) for key, value in time_log.items())
                 f.write('\n')
-                f.writelines('%s   ' % str(round(item, _Program.COV_DIGITS)) for item in _time_log.values())
+                f.writelines(self.format_pretty(round(value,4), max(len(key), 6) + 2) for key, value in time_log.items())
                 f.write('\n------------------------------------------------------------------------------------------------------------------------------\n')
 
     def write_logs(self):
@@ -298,7 +300,8 @@ class CMA_ES:
     max_gens = DEFAULTS['max_gens'], popsize_scale = DEFAULTS['popsize_scale'], max_evaluations = DEFAULTS['max_evaluations']):
         self._input_size = input_size
         self.mode = self.MODES['bytes']
-        self._options = dict(popsize = init_popsize, verb_disp = 0, seed = self.init_seed(seed), bounds = [self.mode['bounds'][0], self.mode['bounds'][1]])
+        self.seed = self.init_seed(seed)
+        self._options = dict(popsize = init_popsize, verb_disp = 0, seed = self.seed - 1, bounds = [self.mode['bounds'][0], self.mode['bounds'][1]])
         self._args = dict(x0 = self.mode['x0'] * self._input_size, sigma0 = self.mode['sigma0'])
         self._max_popsize = max_popsize
         self._max_gens = max_gens
@@ -344,7 +347,7 @@ class CMA_ES:
     def init_seed(self, seed):
         if seed is None:
             return random.randint(10, 1000)
-        return seed - 1
+        return seed
 
     def init_cmaes(self, mean = None, sigma = None, sigmas = None, fixed_variables = None):
         self._options['seed'] += 1
@@ -558,7 +561,7 @@ class Fuzzer:
         self.hot_restart = hot_restart
         self.save_interesting = save_interesting
         self.hot_restart_threshold = hot_restart_threshold
-        self.seed = seed
+        self.objective_name = self.DEFAULTS['objective']
 
         self.objective = self._select_obejctive(objective)
         self.encode = self._select_encode(mode)
@@ -569,6 +572,7 @@ class Fuzzer:
 
     def _select_obejctive(self, objective):
         if objective == 'line':
+            self.objective_name = 'line'
             return self._f_line
         elif objective == 'branch':
             return self._f_branch
@@ -638,7 +642,7 @@ class Fuzzer:
         out = bytearray(np.frompyfunc(parse_to_feasible, 1, 1)(sample).tolist())
         return out
 
-    @_timeit
+    # @_timeit
     def _run_sample(self, sample, returncode_check = False):
         if sample is None:
             return
@@ -682,7 +686,7 @@ class Fuzzer:
     def get_current_state(self):
         return dict(current_testcase = self._samplecollector.get_current_size(), total_testcase =  self._samplecollector.get_total_size(),
          current_coverage = self.get_current_coverage(), total_coverage = self.get_total_coverage(),
-         seed = self._cma_es._options['seed'],popsize = self._cma_es._options['popsize'], generations = self._cma_es.result.iterations, evaluations = self._cma_es.evaluations)
+         CMA_ES_seed = self._cma_es._options['seed'],popsize = self._cma_es._options['popsize'], generations = self._cma_es.result.iterations, evaluations = self._cma_es.evaluations)
 
     def _stop(self):
         if self._interrupted:
