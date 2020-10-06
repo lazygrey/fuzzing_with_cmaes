@@ -62,6 +62,7 @@ OPTIONAL:
 -hr, --hot_restart    activate hot restart while optimizing samples
 -si, --save_interesting
                     save interesting paths while optimizing
+--strategy STRATEGY   strategy label for log and csv
 -ll, --live_logs      write logs as txt file in log files whenever it changes
 ```
 

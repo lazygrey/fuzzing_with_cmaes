@@ -874,7 +874,7 @@ def parse_argv_to_fuzzer_kwargs():
     arg_parser.add_argument('-si', '--save_interesting', action = 'store_true',
         help = 'save interesting paths while optimizing')
     arg_parser.add_argument('--strategy', type = str,
-        help = 'strategy for CMA-ES-Fuzzer')
+        help = 'strategy label for log and csv')
     arg_parser.add_argument('-ll', '--live_logs', action = 'store_true',
         help = 'write logs as txt file in log files whenever it changes')
     arg_parser.add_argument('program_path', nargs = '+' ,type = str,
