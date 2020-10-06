@@ -44,8 +44,8 @@ class FuzzerLogger:
         self._filename = self._log_path + fuzzer._program.pname +'.txt'
         self._csvname = self._log_path + fuzzer._program.pname + '.csv'
         
-        initial_parameter_keys = ['no_reset', 'hot_restart', 'save_interesting', 'mode', 'objective', 'input_size', 'max_popsize', 'popsize_scale', 'max_gens', 'max_eval', 'timeout']
-        initial_parameter_values = [fuzzer.no_reset, fuzzer.hot_restart, fuzzer.save_interesting, fuzzer._cma_es.mode['name'], fuzzer.objective.__name__, fuzzer._cma_es._input_size, fuzzer._cma_es._max_popsize, fuzzer._cma_es._popsize_scale, fuzzer._cma_es._max_gens, fuzzer._cma_es.max_evaluations, fuzzer._timeout]
+        initial_parameter_keys = ['no_reset', 'hot_restart', 'save_interesting', 'mode', 'objective', 'input_size', 'max_popsize', 'popsize_scale', 'max_gens', 'max_eval', 'timeout', 'seed']
+        initial_parameter_values = [fuzzer.no_reset, fuzzer.hot_restart, fuzzer.save_interesting, fuzzer._cma_es.mode['name'], fuzzer.objective.__name__, fuzzer._cma_es._input_size, fuzzer._cma_es._max_popsize, fuzzer._cma_es._popsize_scale, fuzzer._cma_es._max_gens, fuzzer._cma_es.max_evaluations, fuzzer._timeout, fuzzer.seed]
 
         self._csv_lines.append(list(self._log.keys()))
 
@@ -558,6 +558,7 @@ class Fuzzer:
         self.hot_restart = hot_restart
         self.save_interesting = save_interesting
         self.hot_restart_threshold = hot_restart_threshold
+        self.seed = seed
 
         self.objective = self._select_obejctive(objective)
         self.encode = self._select_encode(mode)
