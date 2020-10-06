@@ -30,22 +30,30 @@ void _initialize() {
 }
 
 void _finalize() {
-    FILE * file;
+    printf("n%d", total_input_size);
+
+    // FILE * file;
     /* open the file for writing*/
-    file = fopen("inputsize.txt","w");
+    // file = fopen("inputsize.txt","w");
 
     /* write total_input_size into the file stream*/
-    total_input_size *= 2;
-    fprintf (file, "%d",total_input_size);
+    // total_input_size *= 2;
+    // fprintf (file, "%d",total_input_size);
 
     /* close the file*/  
-    fclose (file);
+    // fclose (file);
     // printf("%d\n", total_input_size);
     // fflush(stdout);
 }
 
 size_t _read(void *p, size_t n) {
     total_input_size++;
+    if (n > 4) {
+        total_input_size++;
+    }
+    if(total_input_size > MAX_INPUT_SIZE){
+            exit(OVER_MAX_INPUT_SIZE);
+        }
     return n;
 }
 

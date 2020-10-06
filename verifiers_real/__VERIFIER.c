@@ -22,9 +22,6 @@ unsigned int parse_unsigned(unsigned int x, int bits) {
 unsigned int _read(size_t n, int is_signed) {
     unsigned int x;
     read(0, &x, sizeof(x));
-    // printf("real: %d\n", x); // test
-    // printf("bytes: %x\n", x); // test
-    // printf("size: %ld\n", n); // test
     if (is_signed) {
         return parse_signed(x, 8*n);
     } else {
@@ -85,18 +82,24 @@ void __VERIFIER_error() {
 //     // }
 // }
 
-_Bool __VERIFIER_nondet_bool() {
-    _Bool x = 0;
-    x = _read(sizeof(x), 1);
-    // printf("  <input type=\"bool\">%d</input>%ld</input size>\n", x, sizeof(x));
-    return x;
-}
-
 char __VERIFIER_nondet_char() {
     char x = 0;
     x = _read(sizeof(x), 1);
     // printf("  <input type=\"char\">%d</input>%ld</input size>\n", x, sizeof(x));
     return x;
+}
+
+_Bool __VERIFIER_nondet_bool() {
+    // _Bool x = 0;
+    // x = _read(sizeof(x), 0);
+    // // printf("  <input type=\"bool\">%d</input>%ld</input size>\n", x, sizeof(x));
+    // return x;
+    char x = __VERIFIER_nondet_char();
+    if (x < 0) {
+        return 0;
+    } else {
+        return 1;
+    }
 }
 
 unsigned char __VERIFIER_nondet_uchar() {

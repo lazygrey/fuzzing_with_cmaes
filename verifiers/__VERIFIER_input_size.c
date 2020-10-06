@@ -4,7 +4,7 @@
 
 /* both variables are implicitly initialized to 0 */
 static int initialized;
-static int total_bytes;
+static int total_input_size;
 static int MAX_BYTES = 1000;
 
 static int OVER_MAX_INPUT_SIZE = 3;
@@ -30,16 +30,17 @@ void _initialize() {
 }
 
 void _finalize() {
-    FILE * file;
+    printf("n%d", total_input_size);
+    // FILE * file;
     /* open the file for writing*/
-    file = fopen("inputsize.txt","w");
+    // file = fopen("inputsize.txt","w");
 
-    /* write total_bytes into the file stream*/
-    fprintf (file, "%d",total_bytes);
+    /* write total_input_size into the file stream*/
+    // fprintf (file, "%d",total_input_size);
 
     /* close the file*/  
-    fclose (file);
-    // printf("%d\n", total_bytes);
+    // fclose (file);
+    // printf("%d\n", total_input_size);
     // fflush(stdout);
 }
 
@@ -47,8 +48,8 @@ size_t _read(void *p, size_t n) {
     unsigned char *x = (unsigned char*)p;
     size_t i;
     for(i=0; i<n; i++) {
-        total_bytes++;
-        if(total_bytes>MAX_BYTES){
+        total_input_size++;
+        if(total_input_size>MAX_BYTES){
             exit(OVER_MAX_INPUT_SIZE);
         }
         x[i] = rand()%256;

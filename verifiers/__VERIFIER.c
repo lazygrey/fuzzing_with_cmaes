@@ -13,18 +13,24 @@ void __VERIFIER_error() {
     exit(ERROR);
 }
 
-_Bool __VERIFIER_nondet_bool() {
-    _Bool x = 0;
-    read(0, &x, sizeof(x));
-    // printf("  <input type=\"bool\">%d</input>%ld</input size>\n", x, sizeof(x));
-    return x;
-}
-
 char __VERIFIER_nondet_char() {
     char x = 0;
     read(0, &x, sizeof(x));
     // printf("  <input type=\"char\">%d</input>%ld</input size>\n", x, sizeof(x));
     return x;
+}
+
+_Bool __VERIFIER_nondet_bool() {
+    // _Bool x = 0;
+    // read(0, &x, sizeof(x));
+    // // printf("  <input type=\"bool\">%d</input>%ld</input size>\n", x, sizeof(x));
+    // return x;
+    char x = __VERIFIER_nondet_char();
+    if (x < 0) {
+        return 0;
+    } else {
+        return 1;
+    }
 }
 
 unsigned char __VERIFIER_nondet_uchar() {
