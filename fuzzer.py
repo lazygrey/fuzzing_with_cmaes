@@ -54,7 +54,7 @@ class FuzzerLogger:
 
         -----------------------------------------------------------------------------------
         execution time for each method:
-        stop     ask     _run     _gcov_branch     cal_branches     _reset     get_branches     get_executed_paths     tell     optimize_sample     optimize_testsuite     
+        stop     ask     _run     _gcov_branch     cal_branches     _reset     get_branches     get_executed_paths     tell     optimize_sample     optimize_samples     
         0.0002   0.0206   0.8224   0.7462   0.0133   0.0141   0.7737   0.0019   0.0105   1.6536   1.6538   
         """
 
@@ -828,7 +828,7 @@ class Fuzzer:
         self._cma_es._options['seed'] = pre_seed
 
     @_timeit
-    def optimize_testsuite(self):
+    def optimize_samples(self):
         optimized = False
         while not self._stop():
             # optimized = self.optimize_sample(number = 1000, score = self.get_current_coverage())
@@ -847,7 +847,7 @@ class Fuzzer:
 
     def generate_testsuite(self):
         self._program._compile_program()
-        self.optimize_testsuite()
+        self.optimize_samples()
         self._program._timeout = None
         # return self.get_total_samples()
         return self.parse_total_samples_to_input_vectors()
@@ -885,7 +885,7 @@ def parse_argv_to_fuzzer_kwargs():
     arg_parser.add_argument('-mp', '--max_popsize', type = int, default = CMA_ES.DEFAULTS['max_popsize'],
         help = 'maximum population size for CMA-ES')
     arg_parser.add_argument('-m', '--mode', type = str, default = CMA_ES.DEFAULTS['mode'],
-        help = 'type of input vectors that CMA-ES-Fuzzer work with')
+        help = 'type of samples that CMA-ES-Fuzzer work with')
     arg_parser.add_argument('-me', '--max_evaluations', type = int, default = CMA_ES.DEFAULTS['max_evaluations'],
         help = 'maximum evaluations for CMA-ES-Fuzzer')
     arg_parser.add_argument('-s', '--seed', type = int, default = CMA_ES.DEFAULTS['seed'],
@@ -899,13 +899,13 @@ def parse_argv_to_fuzzer_kwargs():
     arg_parser.add_argument('-nr', '--no_reset', action = 'store_true',
         help = 'deactivate reset after not optimized (this is for the most basic version)')
     arg_parser.add_argument('-hr', '--hot_restart', action = 'store_true',
-        help = 'activate hot restart while optimizing input vectors')
+        help = 'activate hot restart while optimizing samples')
     arg_parser.add_argument('-si', '--save_interesting', action = 'store_true',
         help = 'save interesting paths while optimizing')
     arg_parser.add_argument('-ll', '--live_logs', action = 'store_true',
-        help = 'write logs in log files whenever it changes')
+        help = 'write logs as txt file in log files whenever it changes')
     arg_parser.add_argument('program_path', nargs = '+' ,type = str,
-        help = 'reletive program path to test')
+        help = 'relative program path to test (only last argument will be regarded as program path)')
 
     args= arg_parser.parse_known_args()[0]
     args.program_path = args.program_path[-1]
