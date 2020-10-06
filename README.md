@@ -89,8 +89,8 @@ fuzzer args:
 fuzzer.py examples/test.c
 program_path: examples/test.c
 initial parameters:
-no_reset  hot_restart  save_interesting  mode  objective  input_size  max_popsize  popsize_scale  max_gens  max_eval  timeout  seed  
-False     False        False             bytes branch     2           1000         10             1000      100000    840      700   
+no_reset  hot_restart  save_interesting  mode  objective  input_size  max_popsize  popsize_scale  max_gens  max_eval  timeout  seed  strategy  
+False     False        False             bytes branch     2           1000         10             1000      100000    840      700   None      
 
 -------------------------------------------------------------------------------------------------------------------------------------------
 logs:
