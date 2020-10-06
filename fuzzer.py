@@ -710,6 +710,9 @@ class Fuzzer:
             if check and (prev_current_cov < self.get_current_coverage() or self.save_interesting and prev_total_cov < self.get_total_coverage()):
                 self._logger.report_changes('-', state = 'optimizing')
 
+            if self.get_total_coverage() == 100:
+                raise StopIteration
+
         return value
 
     @_timeit
@@ -750,9 +753,9 @@ class Fuzzer:
                 # print('bestx:\n',es.result.xbest)
                 # print('bestf:\n',es.result.fbest)
                 # print('stds:\n',es.result.stds)
-
-            except (subprocess.TimeoutExpired,  KeyboardInterrupt) as e:
-                self._interrupted = e.__class__.__name__
+            except (subprocess.TimeoutExpired,  KeyboardInterrupt, StopIteration) as e:
+                if e.__class__ != StopIteration:
+                    self._interrupted = e.__class__.__name__
                 self._program._delete_gcda()
                 break
 
