@@ -57,7 +57,7 @@ class FuzzerLogger:
         self._log_message_lines.append(''.join([self.format_pretty(value, len(initial_parameter_keys[i]) + 2) for i, value in enumerate(initial_parameter_values)]))
         self._log_message_lines.append('\n-------------------------------------------------------------------------------------------------------------------------------------------')
         self._log_message_lines.append('logs:')
-        self._log_message_lines.append(''.join([self.format_pretty(key, len(key) + 2) for key in self._log]))
+        self._log_message_lines.append(''.join([self.format_pretty(key, len(key) + 3) for key in self._log]))
 
         if self._live:
             with open(self._filename, 'w') as f:
@@ -69,7 +69,7 @@ class FuzzerLogger:
                 f.writelines(self.format_pretty(value, len(initial_parameter_keys[i]) + 2) for i, value in enumerate(initial_parameter_values))
                 f.write('\n-------------------------------------------------------------------------------------------------------------------------------------------\n')
                 f.write('logs:\n')
-                f.writelines(self.format_pretty(key, len(key) + 2) for key in self._log)
+                f.writelines(self.format_pretty(key, len(key) + 3) for key in self._log)
                 f.write('\n')
 
         return self
@@ -85,11 +85,11 @@ class FuzzerLogger:
 
         self._csv_lines.append(list(self._log.values()))
 
-        self._log_message_lines.append(''.join([self.format_pretty(value, len(key) + 2) for key, value in self._log.items()]))
+        self._log_message_lines.append(''.join([self.format_pretty(value, len(key) + 3) for key, value in self._log.items()]))
 
         if self._live:
             with open(self._filename, 'a') as f:
-                f.writelines(self.format_pretty(value, len(key) + 2) for key, value in self._log.items())
+                f.writelines(self.format_pretty(value, len(key) + 3) for key, value in self._log.items())
                 f.write('\n')
     
     def report_final(self):
