@@ -28,11 +28,12 @@ def _timeit(f):
 class FuzzerLogger:
     N_INITIAL = 18
 
-    def __init__(self, live = False):
+    def __init__(self, strategy, live):
         self._fuzzer = None
         self._log = dict(fuzzer_state = '', optimized = False, popsize = 0, current_testcase = 0, total_testcase = 0, generations = 0, current_coverage = 0, total_coverage = 0, evaluations = 0 ,time = 0, CMA_ES_seed = None)
         self._log_message_lines = []
-        self._csv_lines = []
+        self._strategy_name = str(strategy)
+        self._csv_lines = [['strategy', self._strategy_name]]
         self._live = live
 
     def format_pretty(self, info, n):
@@ -42,7 +43,7 @@ class FuzzerLogger:
         self._fuzzer = fuzzer
         self._log_path = fuzzer._program.log_dir
         self._filename = self._log_path + fuzzer._program.pname +'.txt'
-        self._csvname = self._log_path + fuzzer._program.pname + '.csv'
+        self._csvname = self._log_path + fuzzer._program.pname + '_' + self._strategy_name +'.csv'
         
         initial_parameter_keys = ['no_reset', 'hot_restart', 'save_interesting', 'mode', 'objective', 'input_size', 'max_popsize', 'popsize_scale', 'max_gens', 'max_eval', 'timeout', 'seed']
         initial_parameter_values = [fuzzer.no_reset, fuzzer.hot_restart, fuzzer.save_interesting, fuzzer._cma_es.mode['name'], fuzzer.objective_name, fuzzer._cma_es._input_size, fuzzer._cma_es._max_popsize, fuzzer._cma_es._popsize_scale, fuzzer._cma_es._max_gens, fuzzer._cma_es.max_evaluations, fuzzer._timeout, fuzzer._cma_es.seed]
@@ -543,15 +544,11 @@ class Fuzzer:
     UNSIGNED_INT_MIN = 0
     UNSIGNED_INT_MAX = 2 ** 32 - 1
 
-    def __init__(self, program_path, no_reset = False, live_logs = False, hot_restart = False, save_interesting = False, mode = DEFAULTS['mode'], objective = DEFAULTS['objective'],  timeout = DEFAULTS['timeout'],  hot_restart_threshold = DEFAULTS['hot_restart_threshold'],
+    def __init__(self, program_path, no_reset = False, live_logs = False, hot_restart = False, save_interesting = False, strategy = None,
+    mode = DEFAULTS['mode'], objective = DEFAULTS['objective'],  timeout = DEFAULTS['timeout'],  hot_restart_threshold = DEFAULTS['hot_restart_threshold'],
     output_dir = _Program.DEFAULT_DIRS['output'], log_dir = _Program.DEFAULT_DIRS['log'], seed = CMA_ES.DEFAULTS['seed'], init_popsize = CMA_ES.DEFAULTS['init_popsize'],
     max_popsize = CMA_ES.DEFAULTS['max_popsize'], max_gens = CMA_ES.DEFAULTS['max_gens'], max_evaluations = CMA_ES.DEFAULTS['max_evaluations'], popsize_scale = CMA_ES.DEFAULTS['popsize_scale']):
-        """Fuzzer with cmaes.
 
-        Args:
-        sampe_type = the type of a sample to optimize
-        function = score function to optimize
-        """
         self._timeout = timeout
         self._interrupted = ''
         self._stop_reason = ''
@@ -563,12 +560,12 @@ class Fuzzer:
         self.hot_restart_threshold = hot_restart_threshold
         self.objective_name = self.DEFAULTS['objective']
 
-        self.objective = self._select_obejctive(objective)
+        self.objective = self._select_obejctive(self.objective_name)
         self.encode = self._select_encode(mode)
         self._program = _Program(program_path, output_dir = output_dir, log_dir = log_dir, timeout=timeout, mode = mode)
         self._cma_es = CMA_ES(seed = seed, init_popsize= init_popsize ,input_size = self.cal_input_size(), max_popsize = max_popsize, max_gens= max_gens, popsize_scale = popsize_scale,mode = mode, max_evaluations=max_evaluations)
         self._samplecollector = SampleCollector(save_interesting)
-        self._logger = FuzzerLogger(live_logs).resister(self)
+        self._logger = FuzzerLogger(strategy, live_logs).resister(self)
 
     def _select_obejctive(self, objective):
         if objective == 'line':
@@ -876,6 +873,8 @@ def parse_argv_to_fuzzer_kwargs():
         help = 'activate hot restart while optimizing samples')
     arg_parser.add_argument('-si', '--save_interesting', action = 'store_true',
         help = 'save interesting paths while optimizing')
+    arg_parser.add_argument('--strategy', type = str,
+        help = 'strategy for CMA-ES-Fuzzer')
     arg_parser.add_argument('-ll', '--live_logs', action = 'store_true',
         help = 'write logs as txt file in log files whenever it changes')
     arg_parser.add_argument('program_path', nargs = '+' ,type = str,
