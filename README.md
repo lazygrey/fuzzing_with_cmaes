@@ -129,4 +129,5 @@ total input vectors: [bytearray(b'\x1fs'), bytearray(b'\xc1\x87'), bytearray(b'[
 line_coverage: 1.0
 branch_coverage: 1.0
 total_eval: 649
+seed: 700
 ```

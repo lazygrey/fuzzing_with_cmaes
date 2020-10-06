@@ -846,6 +846,7 @@ class Fuzzer:
         print('line_coverage:', round(line/100, _Program.COV_DIGITS))
         print('branch_coverage:', round(branch/100,_Program.COV_DIGITS))
         print('total_eval:', self._cma_es.evaluations)
+        print('seed:', self._cma_es.seed)
 
 def parse_argv_to_fuzzer_kwargs():
     arg_parser = argparse.ArgumentParser()
