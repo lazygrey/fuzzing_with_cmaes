@@ -86,50 +86,47 @@ python3 fuzzer.py user_program_dir/user_program.c -mp 100
 Example 1: timout in 10 seconds
 ```
 fuzzer args:
-fuzzer.py examples/test.c -t 10
+fuzzer.py examples/test.c
 program_path: examples/test.c
 initial parameters:
-no_reset          hot_restart       save_interesting  mode              objective         input_size        max_popsize       popsize_scale     max_gens          max_eval          timeout           
-False             False             False             bytes             _f_branch         2                 1000              10                1000              100000            10                
+no_reset  hot_restart  save_interesting  mode  objective  input_size  max_popsize  popsize_scale  max_gens  max_eval  timeout  seed  
+False     False        False             bytes branch     2           1000         10             1000      100000    840      700   
 
--------------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------
 logs:
-fuzzer_state  optimized  popsize  current_testcase  total_testcase  generations  current_coverage  total_coverage  evaluations  time  seed  
-optimizing    -          10       1                 1               0            39.29             39.29           1            0.14  884   
-optimizing    -          10       1                 1               0            50.0              50.0            3            0.16  884   
-done          True       10       1                 1               10           50.0              50.0            110          0.91  884   
-optimizing    -          10       2                 2               0            57.14             57.14           111          0.92  885   
-optimizing    -          10       2                 2               0            60.71             60.71           114          0.94  885   
-optimizing    -          10       2                 2               0            71.43             71.43           115          0.95  885   
-optimizing    -          10       2                 2               1            75.0              75.0            127          1.03  885   
-done          True       10       2                 2               27           75.0              75.0            407          2.96  885   
-optimizing    -          10       3                 3               0            78.57             78.57           408          2.97  886   
-optimizing    -          10       3                 3               0            82.14             82.14           415          3.02  886   
-done          True       10       3                 3               9            82.14             82.14           506          3.64  886   
-optimizing    -          10       4                 4               0            85.71             85.71           507          3.65  887   
-done          True       10       4                 4               6            85.71             85.71           572          4.1   887   
-optimizing    -          10       5                 5               0            89.29             89.29           577          4.14  888   
-done          True       10       5                 5               10           89.29             89.29           682          4.86  888   
-optimizing    -          10       6                 6               0            92.86             92.86           684          4.88  889   
-done          True       10       6                 6               10           92.86             92.86           792          5.62  889   
-optimizing    -          10       7                 7               0            96.43             96.43           794          5.63  890   
-done          True       10       7                 7               30           96.43             96.43           1122         7.88  890   
-optimizing    -          10       8                 8               0            100.0             100.0           1126         7.91  891   
-done          True       10       8                 8               1            100.0             100.0           1133         7.96  891   
+fuzzer_state  optimized  popsize  current_testcase  total_testcase  generations  current_coverage  total_coverage  evaluations  time  CMA_ES_seed  
+optimizing    -          10       1                 1               0            39.29             39.29           1            0.14  700          
+optimizing    -          10       1                 1               1            50.0              50.0            12           0.22  700          
+done          True       10       1                 1               9            50.0              50.0            99           0.84  700          
+optimizing    -          10       2                 2               0            53.57             53.57           100          0.85  701          
+optimizing    -          10       2                 2               0            78.57             78.57           102          0.87  701          
+done          True       10       2                 2               7            78.57             78.57           176          1.38  701          
+optimizing    -          10       3                 3               0            82.14             82.14           177          1.39  702          
+done          True       10       3                 3               6            82.14             82.14           242          1.85  702          
+optimizing    -          10       4                 4               0            85.71             85.71           244          1.86  703          
+done          True       10       4                 4               8            85.71             85.71           330          2.46  703          
+optimizing    -          10       5                 5               0            89.29             89.29           332          2.48  704          
+done          True       10       5                 5               10           89.29             89.29           440          3.23  704          
+optimizing    -          10       6                 6               0            92.86             92.86           443          3.25  705          
+done          True       10       6                 6               10           92.86             92.86           550          4.0   705          
+optimizing    -          10       7                 7               0            96.43             96.43           552          4.02  706          
+done          True       10       7                 7               8            96.43             96.43           638          4.62  706          
+optimizing    -          10       8                 8               0            100.0             100.0           644          4.67  707          
+done          True       10       8                 8               1            100.0             100.0           649          4.7   707          
 
--------------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------
 final report:
 total_testcase        total_coverage        stop_reason        testcase_statuses
-      8               100.0               coverage is 100%               ['SAFE', 'SAFE', 'SAFE', 'SAFE', 'ERROR', 'SAFE', 'SAFE', 'SAFE']         
+      8               100.0               coverage is 100%               ['SAFE', 'SAFE', 'SAFE', 'SAFE', 'SAFE', 'ERROR', 'SAFE', 'SAFE']         
 execution time for each method:
-stop     ask     _run     _gcov     cal_branches     _delete_gcda     get_branches     get_executed_paths     tell     optimize_sample     optimize_samples     
-0.0069   0.0723   3.727   3.3609   0.0537   0.0658   3.4989   0.014   0.1178   7.8247   7.8252   
+stop    get_executed_paths  _encode_bytes  cal_branches  ask     _delete_gcda  tell    _gcov   get_branches  _run    _f_branch  optimize_sample  
+0.0036  0.0082              0.0197         0.0306        0.038   0.0385        0.0706  1.9751  2.0571        2.1858  4.2724     4.57             
 
--------------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------
 total sample len: 8
-total samples: [array([17.13105069, 89.31149773]), array([225.13862945, 142.57292903]), array([219.35965406, 119.31659362]), array([  4.65913897, 189.44266223]), array([135.69827014,  43.52198338]), array([ 84.82877474, 241.75931575]), array([255.9928346 , 220.71963015]), array([221.74850515,   7.6530482 ])]
-total input vectors: [bytearray(b'\x11Y'), bytearray(b'\xe1\x8e'), bytearray(b'\xdbw'), bytearray(b'\x04\xbd'), bytearray(b'\x87+'), bytearray(b'T\xf1'), bytearray(b'\xff\xdc'), bytearray(b'\xdd\x07')]
+total samples: [array([ 31.13450664, 115.03648683]), array([193.08750047, 135.77202659]), array([91.40600764, 64.95261197]), array([135.28334219, 161.639187  ]), array([112.72864089,  23.40044769]), array([142.87455394,  37.00855194]), array([135.458315  , 216.68228025]), array([ 13.41027645, 250.72958518])]
+total input vectors: [bytearray(b'\x1fs'), bytearray(b'\xc1\x87'), bytearray(b'[@'), bytearray(b'\x87\xa1'), bytearray(b'p\x17'), bytearray(b'\x8e%'), bytearray(b'\x87\xd8'), bytearray(b'\r\xfa')]
 line_coverage: 1.0
 branch_coverage: 1.0
-total_eval: 1133
+total_eval: 649
 ```
