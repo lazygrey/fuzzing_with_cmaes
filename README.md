@@ -33,10 +33,12 @@ python3 fuzzer.py [-h] [-od OUTPUT_DIR] [-ld LOG_DIR] [-ip INIT_POPSIZE]
 
 ```
 POSITIONAL:
+```
 program_path          relative program path to test (only last argument will be regarded as program path)
+```
 
 OPTIONAL:
-
+```
 -h, --help            show this help message and exit
 -od OUTPUT_DIR, --output_dir OUTPUT_DIR
                     directory for complied and executable programs
@@ -61,7 +63,7 @@ OPTIONAL:
 -si, --save_interesting
                     save interesting paths while optimizing
 -ll, --live_logs      write logs as txt file in log files whenever it changes
-
+```
 
 
 ## Fuzzing Examples
