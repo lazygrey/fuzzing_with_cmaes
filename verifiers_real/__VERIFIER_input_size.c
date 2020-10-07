@@ -7,9 +7,10 @@ static int initialized;
 static int total_input_size;
 static int MAX_INPUT_SIZE = 1000;
 
-static int OVER_MAX_INPUT_SIZE = 3;
-static int ASSUME = 10;
 static int ERROR = 100;
+static int ASSUME = 101;
+static int OVER_MAX_INPUT_SIZE = 102;
+static int INPUT_SIZE_EXECUTED = 103;
 
 void _initialize();
 void _finalize();
@@ -31,7 +32,7 @@ void _initialize() {
 
 void _finalize() {
     printf("n%d", total_input_size);
-
+    exit(INPUT_SIZE_EXECUTED);
     // FILE * file;
     /* open the file for writing*/
     // file = fopen("inputsize.txt","w");

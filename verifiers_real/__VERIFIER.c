@@ -5,9 +5,9 @@
 #include <string.h>
 
 
-static int OVER_MAX_INPUT_SIZE = 3;
-static int ASSUME = 10;
 static int ERROR = 100;
+static int ASSUME = 101;
+static int OVER_MAX_INPUT_SIZE = 102;
 
 // ssize_t _read(void *p, size_t n);
 
