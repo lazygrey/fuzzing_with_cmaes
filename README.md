@@ -62,7 +62,9 @@ OPTIONAL:
 -nr, --no_reset       deactivate reset after not optimized (this is for the most basic version)
 -hr, --hot_restart    activate hot restart while optimizing samples
 -si, --save_interesting
-                    save interesting paths while optimizing
+                    save interesting coverage item ids while optimizing
+-is INPUT_SIZE, --input_size INPUT_SIZE
+                    fixed input size for CMA-ES
 --strategy STRATEGY   strategy label for log and csv
 -ll, --live_logs      write logs as txt file in log files whenever it changes
 ```
@@ -85,51 +87,49 @@ python3 fuzzer.py user_program_dir/user_program.c -mp 100
 ```
 
 ## Log Examples:
-Example 1: timout in 10 seconds
+Example 1:
 ```
 fuzzer args:
 fuzzer.py examples/test.c
 program_path: examples/test.c
 initial parameters:
-no_reset  hot_restart  save_interesting  mode  coverage_type  input_size  max_popsize  popsize_scale  max_gens  max_eval  timeout  seed  strategy  
-False     False        False             bytes branch         2           1000         10             1000      100000    840      700   None      
+no_reset  hot_restart  save_interesting  sample_type  coverage_type  input_size  max_popsize  popsize_scale  max_gens  max_eval  timeout  seed  strategy  
+False     False        False             bytes        branch         2           1000         10             1000      100000    840      700   None      
 
--------------------------------------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
 logs:
 fuzzer_state   optimized   popsize   current_testcase   total_testcase   generations   current_coverage   total_coverage   evaluations   time   CMA_ES_seed   
-optimizing     -           10        1                  1                0             39.29              39.29            1             0.15   700           
-optimizing     -           10        1                  1                1             50.0               50.0             12            0.24   700           
-done           True        10        1                  1                9             50.0               50.0             99            0.89   700           
-optimizing     -           10        2                  2                0             53.57              53.57            100           0.9    701           
-optimizing     -           10        2                  2                0             78.57              78.57            102           0.92   701           
-done           True        10        2                  2                7             78.57              78.57            176           1.45   701           
-optimizing     -           10        3                  3                0             82.14              82.14            177           1.46   702           
-done           True        10        3                  3                6             82.14              82.14            242           1.93   702           
-optimizing     -           10        4                  4                0             85.71              85.71            244           1.95   703           
-done           True        10        4                  4                8             85.71              85.71            330           2.55   703           
-optimizing     -           10        5                  5                0             89.29              89.29            332           2.57   704           
-done           True        10        5                  5                10            89.29              89.29            440           3.36   704           
-optimizing     -           10        6                  6                0             92.86              92.86            443           3.38   705           
-done           True        10        6                  6                10            92.86              92.86            550           4.14   705           
-optimizing     -           10        7                  7                0             96.43              96.43            552           4.16   706           
-done           True        10        7                  7                8             96.43              96.43            638           4.79   706           
-optimizing     -           10        8                  8                0             100.0              100.0            644           4.84   707           
-done           True        10        8                  8                0             100.0              100.0            644           4.84   707           
+optimizing     -           10        1                  1                0             39.2857            39.2857          1             0.3    700           
+optimizing     -           10        1                  1                1             50.0               50.0             11            0.38   700           
+done           True        10        1                  1                9             50.0               50.0             90            1.03   700           
+optimizing     -           10        2                  2                0             53.5714            53.5714          91            1.04   701           
+optimizing     -           10        2                  2                0             78.5714            78.5714          93            1.06   701           
+done           True        10        2                  2                7             78.5714            78.5714          160           1.6    701           
+optimizing     -           10        3                  3                0             82.1429            82.1429          161           1.6    702           
+done           True        10        3                  3                6             82.1429            82.1429          220           2.07   702           
+optimizing     -           10        4                  4                0             85.7143            85.7143          222           2.09   703           
+done           True        10        4                  4                8             85.7143            85.7143          300           2.72   703           
+optimizing     -           10        5                  5                0             89.2857            89.2857          302           2.74   704           
+done           True        10        5                  5                10            89.2857            89.2857          400           3.53   704           
+optimizing     -           10        6                  6                0             92.8571            92.8571          403           3.56   705           
+done           True        10        6                  6                10            92.8571            92.8571          500           4.33   705           
+optimizing     -           10        7                  7                0             96.4286            96.4286          502           4.35   706           
+done           True        10        7                  7                8             96.4286            96.4286          580           4.99   706           
+optimizing     -           10        8                  8                0             100.0              100.0            586           5.04   707           
+done           True        10        8                  8                0             100.0              100.0            586           5.04   707           
 
--------------------------------------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
 final report:
 total_testcase        total_coverage        stop_reason        testcase_statuses
       8               100.0               total coverage is 100%               ['SAFE', 'SAFE', 'SAFE', 'SAFE', 'SAFE', 'ERROR', 'SAFE', 'SAFE']         
 execution time for each method:
-stop    get_executed_paths  _encode_bytes  cal_branches  ask     _delete_gcda  tell    _gcov   get_branches  _run    objective  optimize_sample  
-0.0039  0.0117              0.0199         0.028         0.0423  0.0484        0.0701  2.0414  2.1231        2.2194  4.3818     4.6987           
+get_line_and_branch_coverages  stop    get_executed_coverage_item_ids  cal_branches  ask     _delete_gcda  _encode_bytes  tell    _gcov   _run    objective  optimize_sample  
+0.0034                         0.0042  0.0096                          0.0287        0.0399  0.0433        0.0444         0.071   2.1345  2.3055  4.57       4.7523           
 
--------------------------------------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
 total sample len: 8
-total samples: [array([ 31.13450664, 115.03648683]), array([193.08750047, 135.77202659]), array([91.40600764, 64.95261197]), array([135.28334219, 161.639187  ]), array([112.72864089,  23.40044769]), array([142.87455394,  37.00855194]), array([135.458315  , 216.68228025]), array([ 13.41027645, 250.72958518])]
-total input vectors: [bytearray(b'\x1fs'), bytearray(b'\xc1\x87'), bytearray(b'[@'), bytearray(b'\x87\xa1'), bytearray(b'p\x17'), bytearray(b'\x8e%'), bytearray(b'\x87\xd8'), bytearray(b'\r\xfa')]
 line_coverage: 1.0
 branch_coverage: 1.0
-total_eval: 644
+total_eval: 586
 seed: 700
 ```

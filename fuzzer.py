@@ -93,7 +93,7 @@ class FuzzerLogger:
                 f.write('\n')
     
     def report_final(self):
-        final_report = [self._fuzzer._samplecollector.get_total_size(), self._fuzzer.get_total_coverage(), self._fuzzer._stop_reason, self._fuzzer._statuses]
+        final_report = [self._fuzzer._samplecollector.get_total_size(), round(self._fuzzer.get_total_coverage(),Program.COV_DIGITS), self._fuzzer._stop_reason, self._fuzzer._statuses]
 
         self._log_message_lines.append('\n-----------------------------------------------------------------------------------------------------------------------------------------------------------')
         self._log_message_lines.append('final report:')
@@ -147,6 +147,7 @@ class Program:
     SEGMENTATION_FAULT = -11
 
     MIN_INPUT_SIZE = 2
+    MAX_INPUT_SIZE = 1000
 
     COV_DIGITS = 2
 
@@ -160,13 +161,12 @@ class Program:
         self.verifier_input_size_path = verifier_dir + verifier_input_size_path
         self.codelines = {}
         self.pname = path[:-2].rsplit('/', 1)[-1]
-        self.takes_input = True
         self._total_lines = 0
         self._state = Program.SAFE
         self._timeout = timeout
         self._init_dirs()
         self.coverage_type = coverage_type
-        self.get_path = self._select_path_type()
+        self.get_coverage_item_ids = self._select_coverage_item_type()
 
     def _init_dirs(self):
         if self.output_dir[-1:] != '/':
@@ -179,11 +179,11 @@ class Program:
         if not os.path.isdir(self.log_dir):
             os.mkdir(self.log_dir)
 
-    def _select_path_type(self):
+    def _select_coverage_item_type(self):
         if self.coverage_type == 'line':
-            return self.get_lines
+            return self.get_line_ids
         elif self.coverage_type == 'branch':
-            return self.get_branches
+            return self.get_branche_ids
 
         exit('ERROR: No such coverage type is supported!')
 
@@ -198,7 +198,18 @@ class Program:
     def _compile_input_size(self):
         return subprocess.run(['gcc', self.path, self.verifier_input_size_path, '-o', self.output_dir + self.pname + 'input_size', '--coverage']).returncode
 
-    def cal_total_path_size(self):
+    def cal_input_size(self):
+        output = subprocess.run(self.output_dir + self.pname + 'input_size', capture_output=True)
+        returncode = output.returncode
+        if returncode != self.INPUT_SIZE_EXECUTED:
+            return 0, returncode
+
+        output = output.stdout.decode()
+        # print(output)
+        input_size = max(int(output[output.rfind('n') + 1:]), self.MIN_INPUT_SIZE)
+        return input_size, returncode
+
+    def cal_coverage_item_size(self):
         gcov = self._gcov('-b', '-c')
         gcov_lines = gcov.split('\n')
         if self.coverage_type == 'line':
@@ -217,19 +228,6 @@ class Program:
         else:
             text = gcov_lines[index + offset]
             return int(text[text.rfind('f')+1:])
-
-    def cal_input_size_and_total_path_size(self):
-        output = subprocess.run(self.output_dir + self.pname + 'input_size', capture_output=True)
-        returncode = output.returncode
-        if returncode != self.INPUT_SIZE_EXECUTED:
-            self.takes_input = False
-            return 0, 0, returncode
-
-        output = output.stdout.decode()
-        input_size = max(int(output[output.rfind('n') + 1:]), self.MIN_INPUT_SIZE)
-        total_size = self.cal_total_path_size()
-
-        return input_size, total_size, returncode
 
     @_timeit
     def _delete_gcda(self):
@@ -279,20 +277,21 @@ class Program:
 
         return output_branches
     
-    @_timeit
-    def get_lines(self):
+    # @_timeit
+    def get_line_ids(self):
         gcov = self._gcov('-t')
         lines = self.cal_lines(gcov)
         self._delete_gcda()
         return lines
 
-    @_timeit
-    def get_branches(self):
+    # @_timeit
+    def get_branche_ids(self):
         gcov = self._gcov('-b', '-c', '-t')
         branches = self.cal_branches(gcov)
         self._delete_gcda()
         return branches
 
+    @_timeit
     def get_line_and_branch_coverages(self):
         gcov = self._gcov('-b', '-c')
         gcov_lines = gcov.split('\n')
@@ -398,94 +397,94 @@ class CMA_ES:
 
 
 class SampleHolder:
-    def __init__(self, sample = None, path = set(), score = -1, stds = []):
+    def __init__(self, sample = None, coverage_item_ids = set(), score = 0, stds = []):
         self.sample = sample
-        self.path = path
+        self.coverage_item_ids = coverage_item_ids
         self.score = score
         self.stds = stds
         
-    def update(self, sample, path, score):
+    def update(self, sample, coverage_item_ids, score):
         optimized = score > self.score
         if optimized:
-            self.path = path
+            self.coverage_item_ids = coverage_item_ids
             self.sample = sample
             self.score = score
         return optimized
 
     def clear(self):
         self.sample = None
-        self.path = set()
-        self.score = -1
+        self.coverage_item_ids = set()
+        self.score = 0
 
 
 class SampleCollector:
-    def __init__(self, save_interesting, total_path_size):
+    def __init__(self, save_interesting, coverage_item_size):
         self.total_sample_holders = [] 
-        self.total_paths = set()
-        self.total_path_size = total_path_size
+        self.total_coverage_item_ids = set()
+        self.coverage_item_size = coverage_item_size
         self.optimized_sample_holders = []
-        self.optimized_paths = set()
+        self.optimized_coverage_item_ids = set()
         self.best_sample_holder = SampleHolder()
-        self.current_coverage = 0
-        self.total_coverage = 0
-        self.common_path = set()
+        self.current_score = 0
+        self.total_score = 0
         self.save_interesting = save_interesting
 
-    def update(self, sample, current_path, score):
+    def update(self, sample, current_coverage_item_ids, score):
         sample_holder = self.best_sample_holder
-        if (sample_holder.update(sample, current_path, score) or self.save_interesting) and not self.total_path_size == 0:
-            self.current_coverage = round(100 * sample_holder.score / self.total_path_size, Program.COV_DIGITS)
-            self.total_coverage = round(100 * len(current_path | self.total_paths) / self.total_path_size, Program.COV_DIGITS)
+        if (sample_holder.update(sample, current_coverage_item_ids, score) or self.save_interesting) and not self.coverage_item_size == 0:
+            self.current_score = sample_holder.score
+            self.total_score = len(current_coverage_item_ids | self.total_coverage_item_ids)
 
     @_timeit
-    def get_executed_paths(self, sample, current_path):
+    def get_executed_coverage_item_ids(self, sample, current_coverage_item_ids):
         if self.save_interesting:
-            self.check_interesting(sample, current_path)
+            self.check_interesting(sample, current_coverage_item_ids)
 
-        output_path = self.optimized_paths | current_path
-        self.update(sample, current_path, len(output_path))
+        output_ids = self.optimized_coverage_item_ids | current_coverage_item_ids
+        self.update(sample, current_coverage_item_ids, len(output_ids))
 
-        return output_path        
+        return output_ids        
 
     # @_timeit
-    def check_interesting(self, sample, current_path):
-        pre_score = len(self.total_paths)
-        self.total_paths.update(current_path)
-        current_score = len(self.total_paths)
+    def check_interesting(self, sample, current_coverage_item_ids):
+        pre_score = len(self.total_coverage_item_ids)
+        self.total_coverage_item_ids.update(current_coverage_item_ids)
+        current_score = len(self.total_coverage_item_ids)
         is_interesting = pre_score < current_score
 
         if is_interesting:
-            self.total_sample_holders.append(SampleHolder(sample, current_path))
+            self.total_sample_holders.append(SampleHolder(sample, current_coverage_item_ids))
 
     def add_best(self, sample, stds):
         sample = self.best_sample_holder.sample
-        path = self.best_sample_holder.path
+        coverage_item_ids = self.best_sample_holder.coverage_item_ids
             
-        pre_score = len(self.optimized_paths)
-        self.optimized_paths.update(path)
-        optimized = pre_score < len(self.optimized_paths)
+        pre_score = len(self.optimized_coverage_item_ids)
+        self.optimized_coverage_item_ids.update(coverage_item_ids)
+        optimized = pre_score < len(self.optimized_coverage_item_ids)
 
         if optimized:
-            self.optimized_sample_holders.append(SampleHolder(sample, path, stds = stds))
+            self.optimized_sample_holders.append(SampleHolder(sample, coverage_item_ids, stds = stds))
             if not self.save_interesting:
-                self.total_sample_holders.append(SampleHolder(sample, path, stds = stds))
-                self.total_paths.update(path)
+                self.total_sample_holders.append(SampleHolder(sample, coverage_item_ids, stds = stds))
+                self.total_coverage_item_ids.update(coverage_item_ids)
         
         self.best_sample_holder.clear()
 
         return optimized
 
-    def remove_common_paths(self):
-        if len(self.optimized_paths) == 0:
+    def remove_common_coverage_item_ids(self):
+        if len(self.optimized_coverage_item_ids) == 0:
             return
-        common_paths = set.intersection(*[sample.path for sample in self.optimized_sample_holders])
-        self.optimized_paths -= common_paths
+        common_ids = set.intersection(*[sample.coverage_item_ids for sample in self.optimized_sample_holders])
+        self.optimized_coverage_item_ids -= common_ids
 
     def reset_optimized(self):
         self.optimized_sample_holders = []
-        self.optimized_paths = set()
+        self.optimized_coverage_item_ids = set()
         self.best_sample_holder = SampleHolder()
         self.current_coverage = 0
+        self.current_score = 0
 
     def pop_first_optimum_holder(self):
         if len(self.optimized_sample_holders) == 0:
@@ -493,17 +492,12 @@ class SampleCollector:
         
         sample_holder = self.optimized_sample_holders[0]
         self.optimized_sample_holders = self.optimized_sample_holders[1:]
-        # self.optimized_paths -= sample_holder.path
-        self.optimized_paths = set()
+        # self.optimized_coverage_item_ids -= sample_holder.coverage_item_ids
+        self.optimized_coverage_item_ids = set()
         for holder in self.optimized_sample_holders:
-            self.optimized_paths.update(holder.path)
+            self.optimized_coverage_item_ids.update(holder.coverage_item_ids)
+
         return sample_holder
-
-    def get_current_coverage(self):
-        return self.current_coverage
-
-    def get_total_coverage(self):
-        return self.total_coverage
 
     def get_optimized_samples(self):
         return [s.sample for s in self.optimized_sample_holders]
@@ -515,6 +509,12 @@ class SampleCollector:
         if self.best_sample_holder.sample is not None:
             size += 1
         return size
+
+    def get_current_score(self):
+        return self.current_score
+    
+    def get_total_score(self):
+        return self.total_score
 
     def get_current_size(self):
         return self.cal_size(len(self.optimized_sample_holders))
@@ -538,7 +538,7 @@ class Fuzzer:
     NO_INTERESTING_BRANCHES = 'the given program has no interesting branches'
     NO_INPUT = 'the given program takes no inputs'
 
-    def __init__(self, program_path, no_reset = False, live_logs = False, hot_restart = False, save_interesting = False, strategy = None,
+    def __init__(self, program_path, no_reset = False, live_logs = False, hot_restart = False, save_interesting = False, strategy = None, input_size = None,
     sample_type = DEFAULTS['sample_type'], timeout = DEFAULTS['timeout'],  hot_restart_threshold = DEFAULTS['hot_restart_threshold'], coverage_type = Program.DEFAULTS['coverage_type'],
     output_dir = Program.DEFAULT_DIRS['output'], log_dir = Program.DEFAULT_DIRS['log'], seed = CMA_ES.DEFAULTS['seed'], init_popsize = CMA_ES.DEFAULTS['init_popsize'],
     max_popsize = CMA_ES.DEFAULTS['max_popsize'], max_gens = CMA_ES.DEFAULTS['max_gens'], max_evaluations = CMA_ES.DEFAULTS['max_evaluations'], popsize_scale = CMA_ES.DEFAULTS['popsize_scale']):
@@ -556,9 +556,9 @@ class Fuzzer:
 
         self.encode = self._select_encode(sample_type)
         self._program = Program(program_path, output_dir, log_dir, timeout, sample_type, coverage_type)
-        input_size, total_path_size = self.cal_input_size_and_total_path_size()
-        self.cma_es = CMA_ES(seed, input_size, init_popsize, max_popsize, max_gens, popsize_scale, max_evaluations)
-        self._samplecollector = SampleCollector(save_interesting, total_path_size)
+        self._check_compile_error(self._program._compile_input_size())
+        self.cma_es = CMA_ES(seed, self._cal_input_size(input_size), init_popsize, max_popsize, max_gens, popsize_scale, max_evaluations)
+        self._samplecollector = SampleCollector(save_interesting, self._program.cal_coverage_item_size())
         self._logger = FuzzerLogger(strategy, live_logs).resister(self)
 
     def _select_encode(self, sample_type):
@@ -576,7 +576,7 @@ class Fuzzer:
 
     def _check_runtime_error(self, returncode):
         if returncode == Program.OVER_MAX_INPUT_SIZE:
-            exit('ERROR: The input for "' + self._program.path + '" requires more than 1000 bytes!')
+            exit('ERROR: The input for "' + self._program.path + '" requires more than 1000 input size!')
         elif returncode == Program.SEGMENTATION_FAULT:
             exit('ERROR: Segmentation Fault for "' + self._program.path +'"!')
 
@@ -587,17 +587,25 @@ class Fuzzer:
 
         self._statuses.append(state)
 
-    def cal_input_size_and_total_path_size(self):
-        self._check_compile_error(self._program._compile_input_size())
-        input_size, total_path_size, returncode = self._program.cal_input_size_and_total_path_size()
-        self._check_runtime_error(returncode)
-        return input_size, total_path_size
+    def _cal_input_size(self, input_size):
+        if input_size is None:
+            input_size, returncode = self._program.cal_input_size()
+            self._check_runtime_error(returncode)
+        else:
+            input_size = min(max(input_size, Program.MIN_INPUT_SIZE), Program.MAX_INPUT_SIZE)
+        return input_size
 
     def get_current_coverage(self):
-        return self._samplecollector.get_current_coverage()
+        if self._samplecollector.coverage_item_size == 0:
+            return 0
+
+        return 100 * self._samplecollector.get_current_score() / self._samplecollector.coverage_item_size
 
     def get_total_coverage(self):
-        return self._samplecollector.get_total_coverage()
+        if self._samplecollector.coverage_item_size == 0:
+            return 0
+
+        return 100 * self._samplecollector.get_total_score() / self._samplecollector.coverage_item_size
 
     def get_optimized_samples(self):
         return self._samplecollector.get_optimized_samples()
@@ -654,20 +662,20 @@ class Fuzzer:
     @_timeit
     def objective(self, sample):
         self._run_sample(sample)
-        paths = self._program.get_path()
+        coverage_item_ids = self._program.get_coverage_item_ids()
         # penalty = self.penalize(sample)
-        paths = self._samplecollector.get_executed_paths(sample, paths)
-
-        return -round(100 * len(paths) / self._samplecollector.total_path_size, Program.COV_DIGITS)
+        executed_coverage_item_ids = self._samplecollector.get_executed_coverage_item_ids(sample, coverage_item_ids)
+        
+        return -len(executed_coverage_item_ids)
     
     def get_current_state(self):
         return dict(current_testcase = self._samplecollector.get_current_size(), total_testcase =  self._samplecollector.get_total_size(),
-         current_coverage = self.get_current_coverage(), total_coverage = self.get_total_coverage(),
+         current_coverage = round(self.get_current_coverage(), 4), total_coverage = round(self.get_total_coverage(), 4),
          CMA_ES_seed = self.cma_es._options['seed'],popsize = self.cma_es._options['popsize'], generations = self.cma_es.result.iterations, evaluations = self.cma_es.evaluations)
 
     def _stop(self):
         if self._interrupted is not None:
-            if len(self._interrupted.args) == 0:
+            if self._interrupted.__class__ != StopIteration:
                 self._stop_reason = self._interrupted.__class__.__name__
             else:
                 self._stop_reason = self._interrupted.args[0]
@@ -692,6 +700,9 @@ class Fuzzer:
             self.cma_es.update_evals()
             if check and (prev_current_cov < self.get_current_coverage() or self.save_interesting and prev_total_cov < self.get_total_coverage()):
                 self._logger.report_changes('-', state = 'optimizing')
+
+            if self.cma_es.evaluations >= self.cma_es.max_evaluations:
+                raise StopIteration(self.OVER_MAX_EVAL)
 
             if self.get_total_coverage() == 100:
                 raise StopIteration(self.FULL_COVERAGE)
@@ -723,10 +734,10 @@ class Fuzzer:
                 es.update_result()
 
                 # print('----------------------------------')
-                # print('samples:\ns', samples)
                 # print('iter:\n', es.result.iterations)
                 # print('evals:\n', es.result.evaluations)
                 # print('values:\n', values)
+                # print('samples:\n', samples)
                 # print('means:\n',es.result.xfavorite)
                 # print('bestx:\n',es.result.xbest)
                 # print('bestf:\n',es.result.fbest)
@@ -760,7 +771,7 @@ class Fuzzer:
     def optimize_samples_with_hot_restart(self):
         number_of_hot_restarts = len(self._samplecollector.optimized_sample_holders)
         optimized = False
-        pre_seed = self.cma_es._options['seed']
+        prev_seed = self.cma_es._options['seed']
         while number_of_hot_restarts > 0 and not self._stop():
             if not optimized:
                 mean, sigmas = self.extract_mean_sigmas_for_hot_restart(self._samplecollector.pop_first_optimum_holder())
@@ -774,7 +785,7 @@ class Fuzzer:
                 number_of_hot_restarts -= 1
 
         # to observe the independent effect of hot restart
-        self.cma_es._options['seed'] = pre_seed
+        self.cma_es._options['seed'] = prev_seed
 
     # @_timeit
     def optimize_samples(self):
@@ -799,7 +810,7 @@ class Fuzzer:
             self._stop_reason = self.NO_INPUT
             return False
 
-        if self._samplecollector.total_path_size == 0:
+        if self._samplecollector.coverage_item_size == 0:
             self.save_random_sample()
             self._stop_reason = self.NO_INTERESTING_BRANCHES
             return False
@@ -807,10 +818,15 @@ class Fuzzer:
         return True
 
     def generate_testsuite(self):
-        self._program._compile_program()
-        if self.check_no_early_stop():
-            self.optimize_samples()
-        self._program._timeout = None
+        try:
+            self._program._compile_program()
+            if self.check_no_early_stop():
+                self.optimize_samples()
+        except:
+            self._interrupted = sys.exc_info()[0]
+        finally:
+            self._program._timeout = None
+
         return self.parse_total_samples_to_input_vectors()
 
     def parse_total_samples_to_input_vectors(self):
@@ -836,8 +852,8 @@ class Fuzzer:
         print('total sample len:', len(total_samples))
         print('total samples:', total_samples)
         print('total input vectors:', self.parse_total_samples_to_input_vectors())
-        print('line_coverage:', round(line/100, Program.COV_DIGITS))
-        print('branch_coverage:', round(branch/100,Program.COV_DIGITS))
+        print('line_coverage:', round(line/100, 4))
+        print('branch_coverage:', round(branch/100, 4))
         print('total_eval:', self.cma_es.evaluations)
         print('seed:', self.cma_es.seed)
 
@@ -868,7 +884,9 @@ def parse_argv_to_fuzzer_kwargs():
     arg_parser.add_argument('-hr', '--hot_restart', action = 'store_true',
         help = 'activate hot restart while optimizing samples')
     arg_parser.add_argument('-si', '--save_interesting', action = 'store_true',
-        help = 'save interesting paths while optimizing')
+        help = 'save interesting coverage item ids while optimizing')
+    arg_parser.add_argument('-is', '--input_size', type = int,
+        help = 'fixed input size for CMA-ES')
     arg_parser.add_argument('--strategy', type = str,
         help = 'strategy label for log and csv')
     arg_parser.add_argument('-ll', '--live_logs', action = 'store_true',
