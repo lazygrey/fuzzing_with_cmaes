@@ -5,6 +5,8 @@
 /* both variables are implicitly initialized to 0 */
 static int initialized;
 static int total_input_size;
+
+static int SEED = 123;
 static int MAX_INPUT_SIZE = 1000;
 
 static int ERROR = 100;
@@ -24,9 +26,10 @@ void _initialize() {
     fflush(stdout);
 
     // srand(time(NULL));
-    struct timeval t;
-    gettimeofday(&t, NULL);
-    srand(t.tv_usec * t.tv_sec);
+    // struct timeval t;
+    // gettimeofday(&t, NULL);
+    // srand(t.tv_usec * t.tv_sec);
+    srand(SEED);
     atexit(_finalize);
 }
 
@@ -48,13 +51,20 @@ void _finalize() {
 }
 
 size_t _read(void *p, size_t n) {
+    unsigned char *x = (unsigned char*)p;
+    size_t i;
     total_input_size++;
     if (n > 4) {
         total_input_size++;
     }
-    if(total_input_size > MAX_INPUT_SIZE){
-            exit(OVER_MAX_INPUT_SIZE);
-        }
+
+    if(total_input_size >= MAX_INPUT_SIZE){
+        _finalize();
+    }
+
+    for (i=0;i<n;i++){
+        x[i] = rand()%256;
+    }
     return n;
 }
 

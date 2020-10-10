@@ -1,8 +1,7 @@
 #include <stdlib.h>
-#include <stdio.h>
 #include <unistd.h>
-#include <assert.h>
-#include <string.h>
+// #include <stdio.h>
+// #include <assert.h>
 
 
 static int ERROR = 100;
@@ -50,37 +49,6 @@ unsigned long _read2(size_t n, int is_signed) {
 void __VERIFIER_error() {
     exit(ERROR);
 }
-
-// ssize_t _read(void *p, size_t n) {
-//     long dump = 0;
-//     read(0, &dump, 8 - n);
-//     read(0, p, n);
-//     // char inputs[n];
-//     // long dump;
-//     // read(0, &dump, 8 - n); // ignore first (8 - n)  bytes
-//     // char input;
-//     // // read(0, input, n);
-//     // size_t i;
-//     // for (i = 0; i < n; i++){
-//     //     read(0, &inputs[i], 1);
-//     // }
-//     // // read(0, p, n);
-
-//     // memcpy(p, &inputs, n);
-//     return n;
-// }
-
-// void _read2(void *buf, size_t n) {
-//     // char* inputs;
-//     long dump;
-//     read(0, &dump, 8 - n); // ignore first (8 - n)  bytes
-//     // read(0, input, n);
-//     size_t i;
-//     read(0, buf, n);
-//     // printf("")
-//     // for (i = 0; i < n; i++){
-//     // }
-// }
 
 char __VERIFIER_nondet_char() {
     char x = 0;
@@ -175,17 +143,21 @@ unsigned long __VERIFIER_nondet_ulong() {
 }
 
 float __VERIFIER_nondet_float() {
-    float x = 0.0;
-    x = _read(sizeof(x), 1);
-    // printf("  <input type=\"float\">%f</input>\n", x);
-    return x;
+    float f = 0.0;
+    unsigned int x;
+    x = _read(sizeof(x), 0);
+    f = *(float*) &x;
+    // printf("  <input type=\"float\">%f</input>\n", f);
+    return f;
 }
 
 double __VERIFIER_nondet_double() {
-    double x = 0.0;
-    x = _read2(sizeof(x), 1);
-    // printf("  <input type=\"double\">%lf</input>\n", x);
-    return x;
+    double d = 0.0;
+    long x;
+    x = _read2(sizeof(x), 0);
+    d = *(double*) &x;
+    // printf("  <input type=\"double\">%f</input>\n", d);
+    return d;
 }
 
 

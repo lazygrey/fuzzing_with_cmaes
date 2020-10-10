@@ -1,7 +1,7 @@
 #include <stdlib.h>
-#include <stdio.h>
 #include <unistd.h>
-#include <assert.h>
+// #include <stdio.h>
+// #include <assert.h>
 
 
 static int ERROR = 100;
