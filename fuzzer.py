@@ -192,9 +192,11 @@ class Program:
             return None
         return self._timeout - time.time() + _init_time
 
+    @_timeit
     def _compile_program(self):
         return subprocess.run(['gcc',self.path , self.verifier_path, '-o', self.output_dir + self.pname, '--coverage']).returncode
 
+    @_timeit
     def _compile_input_size(self):
         return subprocess.run(['gcc', self.path, self.verifier_input_size_path, '-o', self.output_dir + self.pname + '_input_size', '--coverage']).returncode
 
@@ -620,6 +622,8 @@ class Fuzzer:
 
     @_timeit
     def _encode_real(self, sample):
+        if sample is None:
+            return None
         parse_to_feasible = lambda x: int(min(max(x * self.PARSING_SCALE, self.UNSIGNED_INT_MIN), self.UNSIGNED_INT_MAX))
         out = bytearray()
         for sample_comp in sample:
@@ -628,9 +632,12 @@ class Fuzzer:
 
     @_timeit
     def _encode_bytes(self, sample):
+        if sample is None:
+            return None
+
         lowerbound, upperbound = self.cma_es.get_bounds()
-        parse_to_feasible = lambda x: int(min(max(x, lowerbound), upperbound))
-        out = bytearray(np.frompyfunc(parse_to_feasible, 1, 1)(sample).tolist())
+        parse_to_feasible = lambda x: int(min(max(x, lowerbound), upperbound - 1))
+        out = bytearray(list(np.frompyfunc(parse_to_feasible, 1, 1)(sample)))
         return out
 
     # @_timeit
