@@ -196,21 +196,21 @@ class Program:
         return subprocess.run(['gcc',self.path , self.verifier_path, '-o', self.output_dir + self.pname, '--coverage']).returncode
 
     def _compile_input_size(self):
-        return subprocess.run(['gcc', self.path, self.verifier_input_size_path, '-o', self.output_dir + self.pname + 'input_size', '--coverage']).returncode
+        return subprocess.run(['gcc', self.path, self.verifier_input_size_path, '-o', self.output_dir + self.pname + '_input_size', '--coverage']).returncode
 
     def cal_input_size(self):
-        output = subprocess.run(self.output_dir + self.pname + 'input_size', capture_output=True)
+        output = subprocess.run(self.output_dir + self.pname + '_input_size', capture_output=True)
         returncode = output.returncode
         if returncode != self.INPUT_SIZE_EXECUTED:
             return 0, returncode
 
         output = output.stdout.decode()
-        # print(output)
         input_size = max(int(output[output.rfind('n') + 1:]), self.MIN_INPUT_SIZE)
         return input_size, returncode
 
     def cal_coverage_item_size(self):
         gcov = self._gcov('-b', '-c')
+        self._delete_gcda()
         gcov_lines = gcov.split('\n')
         if self.coverage_type == 'line':
             offset = 1
@@ -233,6 +233,8 @@ class Program:
     def _delete_gcda(self):
         if os.path.isfile(self.pname + '.gcda'):
             os.remove(self.pname+'.gcda')
+        if os.path.isfile('__VERIFIER.gcda'):
+            os.remove('__VERIFIER.gcda')
 
     @_timeit
     def _run(self, input_bytes):
@@ -280,20 +282,19 @@ class Program:
     # @_timeit
     def get_line_ids(self):
         gcov = self._gcov('-t')
-        lines = self.cal_lines(gcov)
         self._delete_gcda()
-        return lines
+        return self.cal_lines(gcov)
 
     # @_timeit
     def get_branche_ids(self):
         gcov = self._gcov('-b', '-c', '-t')
-        branches = self.cal_branches(gcov)
         self._delete_gcda()
-        return branches
+        return self.cal_branches(gcov)
 
     @_timeit
     def get_line_and_branch_coverages(self):
         gcov = self._gcov('-b', '-c')
+        self._delete_gcda()
         gcov_lines = gcov.split('\n')
         index = -1
         line_offset = 15
@@ -311,7 +312,6 @@ class Program:
             if not gcov_lines[branch_index].startswith('No'):
                 branch_index += 1 # for 'Taken'
                 branch_coverage = float(gcov_lines[branch_index][branch_offset:].split('%')[0])
-        self._delete_gcda()
         return line_coverage, branch_coverage
 
 
@@ -397,7 +397,7 @@ class CMA_ES:
 
 
 class SampleHolder:
-    def __init__(self, sample = None, coverage_item_ids = set(), score = 0, stds = []):
+    def __init__(self, sample = None, coverage_item_ids = set(), score = -1, stds = []):
         self.sample = sample
         self.coverage_item_ids = coverage_item_ids
         self.score = score
@@ -431,9 +431,10 @@ class SampleCollector:
 
     def update(self, sample, current_coverage_item_ids, score):
         sample_holder = self.best_sample_holder
-        if (sample_holder.update(sample, current_coverage_item_ids, score) or self.save_interesting) and not self.coverage_item_size == 0:
+        if sample_holder.update(sample, current_coverage_item_ids, score) and not self.coverage_item_size == 0:
             self.current_score = sample_holder.score
-            self.total_score = len(current_coverage_item_ids | self.total_coverage_item_ids)
+            if not self.save_interesting:
+                self.total_score = len(current_coverage_item_ids | self.total_coverage_item_ids)
 
     @_timeit
     def get_executed_coverage_item_ids(self, sample, current_coverage_item_ids):
@@ -449,8 +450,8 @@ class SampleCollector:
     def check_interesting(self, sample, current_coverage_item_ids):
         pre_score = len(self.total_coverage_item_ids)
         self.total_coverage_item_ids.update(current_coverage_item_ids)
-        current_score = len(self.total_coverage_item_ids)
-        is_interesting = pre_score < current_score
+        self.total_score = len(self.total_coverage_item_ids)
+        is_interesting = pre_score < self.total_score
 
         if is_interesting:
             self.total_sample_holders.append(SampleHolder(sample, current_coverage_item_ids))
@@ -463,7 +464,7 @@ class SampleCollector:
         self.optimized_coverage_item_ids.update(coverage_item_ids)
         optimized = pre_score < len(self.optimized_coverage_item_ids)
 
-        if optimized:
+        if optimized or len(self.total_sample_holders) == 0:
             self.optimized_sample_holders.append(SampleHolder(sample, coverage_item_ids, stds = stds))
             if not self.save_interesting:
                 self.total_sample_holders.append(SampleHolder(sample, coverage_item_ids, stds = stds))
@@ -528,7 +529,7 @@ class SampleCollector:
 
 class Fuzzer:
     DEFAULTS = {'timeout' : 14 * 60, 'sample_type' : 'bytes', 'hot_restart_threshold' : 25}
-    VERIFIER_ERROS = {Program.SAFE : 'SAFE', Program.ERROR : 'ERROR', Program.ASSUME : 'ASSUME_ERROR'}
+    VERIFIER_ERROS = {Program.SAFE : 'SAFE', Program.ERROR : 'ERROR', Program.ASSUME : 'ASSUME_ERROR', Program.OVER_MAX_INPUT_SIZE: 'OVER_MAX_INPUT_SIZE'}
     PARSING_SCALE = 2 ** (32 - 8)
     UNSIGNED_INT_MIN = 0
     UNSIGNED_INT_MAX = 2 ** 32 - 1
@@ -581,9 +582,10 @@ class Fuzzer:
             exit('ERROR: Segmentation Fault for "' + self._program.path +'"!')
 
     def _check_verifier_error(self, returncode):
-        state = 'UNKOWN: ' + str(returncode)
         if returncode in Fuzzer.VERIFIER_ERROS:
             state = Fuzzer.VERIFIER_ERROS[returncode]
+        else:
+            state = 'UNKOWN: ' + str(returncode)
 
         self._statuses.append(state)
 
@@ -744,7 +746,6 @@ class Fuzzer:
                 # print('stds:\n',es.result.stds)
             except (subprocess.TimeoutExpired,  KeyboardInterrupt, StopIteration) as e:
                 self._interrupted = e
-                self._program._delete_gcda()
                 break
 
         return self._samplecollector.add_best(es.result.xbest, es.result.stds)
@@ -825,6 +826,7 @@ class Fuzzer:
         except:
             self._interrupted = sys.exc_info()[0]
         finally:
+            self._program._delete_gcda()
             self._program._timeout = None
 
         return self.parse_total_samples_to_input_vectors()
@@ -833,8 +835,7 @@ class Fuzzer:
         return [self.encode(sample) for sample in self.get_total_samples()]            
 
     def last_report(self):
-        if os.path.isfile(self._program.pname+'.gcda'):
-            os.remove(self._program.pname+'.gcda')
+        self._program._compile_program()
 
         total_samples = self.get_total_samples()
         if self.cma_es.input_size == 0:
@@ -852,8 +853,8 @@ class Fuzzer:
         print('total sample len:', len(total_samples))
         print('total samples:', total_samples)
         print('total input vectors:', self.parse_total_samples_to_input_vectors())
-        print('line_coverage:', round(line/100, 4))
-        print('branch_coverage:', round(branch/100, 4))
+        print('line_coverage:', 0.01 * line)
+        print('branch_coverage:', 0.01 * branch)
         print('total_eval:', self.cma_es.evaluations)
         print('seed:', self.cma_es.seed)
 

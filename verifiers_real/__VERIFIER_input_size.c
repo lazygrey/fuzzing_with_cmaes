@@ -69,9 +69,9 @@ size_t _read(void *p, size_t n) {
 }
 
 void __VERIFIER_error() {
-    // _finalize();
+    _finalize();
     // error_counter++;
-    exit(ERROR);
+    // exit(ERROR);
 }
 
 _Bool __VERIFIER_nondet_bool() {
