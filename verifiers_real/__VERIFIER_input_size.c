@@ -4,6 +4,7 @@
 
 /* both variables are implicitly initialized to 0 */
 static int initialized;
+static int finalized;
 static int total_input_size;
 
 static int SEED = 123;
@@ -23,17 +24,21 @@ void _initialize() {
         return;
     initialized = 1;
 
-    fflush(stdout);
+    // fflush(stdout);
 
     // srand(time(NULL));
-    // struct timeval t;
-    // gettimeofday(&t, NULL);
-    // srand(t.tv_usec * t.tv_sec);
-    srand(SEED);
+    struct timeval t;
+    gettimeofday(&t, NULL);
+    srand(t.tv_usec * t.tv_sec);
+    // srand(SEED);
     atexit(_finalize);
 }
 
 void _finalize() {
+    if (finalized) {
+        return;
+    }
+    finalized++;
     printf("n%d", total_input_size);
     exit(INPUT_SIZE_EXECUTED);
     // FILE * file;
@@ -61,10 +66,7 @@ size_t _read(void *p, size_t n) {
     if(total_input_size >= MAX_INPUT_SIZE){
         _finalize();
     }
-
-    for (i=0;i<n;i++){
-        x[i] = rand()%256;
-    }
+    x[0] = rand()%256;
     return n;
 }
 
