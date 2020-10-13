@@ -530,7 +530,7 @@ class SampleCollector:
 
 
 class Fuzzer:
-    DEFAULTS = {'timeout' : 14 * 60, 'sample_type' : 'bytes', 'hot_restart_threshold' : 25}
+    DEFAULTS = {'timeout' : 14 * 60, 'sample_type' : 'bytes', 'hot_restart_threshold' : 0.5*0.3*256}
     VERIFIER_ERROS = {Program.SAFE : 'SAFE', Program.ERROR : 'ERROR', Program.ASSUME : 'ASSUME_ERROR', Program.OVER_MAX_INPUT_SIZE: 'OVER_MAX_INPUT_SIZE'}
     PARSING_SCALE = 2 ** (32 - 8)
     UNSIGNED_INT_MIN = 0
