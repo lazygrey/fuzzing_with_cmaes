@@ -8,21 +8,32 @@ static int ERROR = 100;
 static int ASSUME = 101;
 static int OVER_MAX_INPUT_SIZE = 102;
 
+static int MAX_INPUT_SIZE = 1000;
+
+static int input_size;
 
 void __VERIFIER_error() {
     exit(ERROR);
 }
 
+ssize_t _read (void * p, size_t n) {
+    input_size += n;
+    if (input_size > MAX_INPUT_SIZE) {
+        exit(OVER_MAX_INPUT_SIZE);
+    }
+    return read(0, p, n);
+}
+
 char __VERIFIER_nondet_char() {
     char x = 0;
-    read(0, &x, sizeof(x));
+    _read(&x, sizeof(x));
     // printf("  <input type=\"char\">%d</input>%ld</input size>\n", x, sizeof(x));
     return x;
 }
 
 _Bool __VERIFIER_nondet_bool() {
     // _Bool x = 0;
-    // read(0, &x, sizeof(x));
+    // _read(&x, sizeof(x));
     // // printf("  <input type=\"bool\">%d</input>%ld</input size>\n", x, sizeof(x));
     // return x;
     char x = __VERIFIER_nondet_char();
@@ -35,84 +46,84 @@ _Bool __VERIFIER_nondet_bool() {
 
 unsigned char __VERIFIER_nondet_uchar() {
     unsigned char x = 0;
-    read(0, &x, sizeof(x));
+    _read(&x, sizeof(x));
     // printf("  <input type=\"unsigned char\">%u</input>\n", x);
     return x;
 }
 
 short __VERIFIER_nondet_short() {
     short x = 0;
-    read(0, &x, sizeof(x));
+    _read(&x, sizeof(x));
     // printf("  <input type=\"short\">%hi</input>\n", x);
     return x;
 }
 
 unsigned short __VERIFIER_nondet_ushort() {
     unsigned short x = 0;
-    read(0, &x, sizeof(x));
+    _read(&x, sizeof(x));
     // printf("  <input type=\"unsigned short\">%hu</input>\n", x);
     return x;
 }
 
 unsigned long __VERIFIER_nondet_unsigned_long() {
     unsigned long x = 0;
-    read(0, &x, sizeof(x));
+    _read(&x, sizeof(x));
     // printf("  <input type=\"unsigned long\">%lu</input>\n", x);
     return x;
 }
 
 // void * __VERIFIER_nondet_pointer() {
 //     unsigned long x = 0;
-//     read(0, &x, sizeof(x));
+//     _read(&x, sizeof(x));
     // printf("  <input type=\"unsigned long\">%lu</input>\n", x);
 //     return (void *) x;
 // }
 
 long __VERIFIER_nondet_long() {
     long x = 0;
-    read(0, &x, sizeof(x));
+    _read(&x, sizeof(x));
     // printf("  <input type=\"long\">%li</input>\n", x);
     return x;
 }
 
 unsigned int __VERIFIER_nondet_uint() {
     unsigned int x = 0;
-    read(0, &x, sizeof(x));
+    _read(&x, sizeof(x));
     // printf("  <input type=\"unsigned int\">%u</input>\n", x);
     return x;
 }
 
 int __VERIFIER_nondet_int() {
     int x = 0;
-    read(0, &x, sizeof(x));
+    _read(&x, sizeof(x));
     // printf("  <input type=\"int\">%d</input>\n", x);
     return x;
 }
 
 unsigned __VERIFIER_nondet_unsigned() {
     unsigned x = 0;
-    read(0, &x, sizeof(x));
+    _read(&x, sizeof(x));
     // printf("  <input type=\"unsigned\">%d</input>\n", x);
     return x;
 }
 
 unsigned long __VERIFIER_nondet_ulong() {
     unsigned long x = 0;
-    read(0, &x, sizeof(x));
+    _read(&x, sizeof(x));
     // printf("  <input type=\"unsigned long\">%lu</input>\n", x);
     return x;
 }
 
 float __VERIFIER_nondet_float() {
     float x = 0.0;
-    read(0, &x, sizeof(x));
+    _read(&x, sizeof(x));
     // printf("  <input type=\"float\">%f</input>\n", x);
     return x;
 }
 
 double __VERIFIER_nondet_double() {
     double x = 0.0;
-    read(0, &x, sizeof(x));
+    _read(&x, sizeof(x));
     // printf("  <input type=\"double\">%lf</input>\n", x);
     return x;
 }

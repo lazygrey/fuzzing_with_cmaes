@@ -1,13 +1,14 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/time.h>
+#include <unistd.h>
 
 /* both variables are implicitly initialized to 0 */
 static int initialized;
 static int finalized;
 static int total_input_size;
 
-static int SEED = 123;
+static int seed = 123;
 static int MAX_INPUT_SIZE = 1000;
 
 static int ERROR = 100;
@@ -23,14 +24,14 @@ void _initialize() {
     if(initialized)
         return;
     initialized = 1;
-
+    read(0, &seed, sizeof(seed));
     // fflush(stdout);
 
     // srand(time(NULL));
-    struct timeval t;
-    gettimeofday(&t, NULL);
-    srand(t.tv_usec * t.tv_sec);
-    // srand(SEED);
+    // struct timeval t;
+    // gettimeofday(&t, NULL);
+    // srand(t.tv_usec * t.tv_sec);
+    srand(seed);
     atexit(_finalize);
 }
 
@@ -38,8 +39,9 @@ void _finalize() {
     if (finalized) {
         return;
     }
-    finalized++;
+    finalized = 1;
     printf("n%d", total_input_size);
+    total_input_size = 0;
     exit(INPUT_SIZE_EXECUTED);
     // FILE * file;
     /* open the file for writing*/
@@ -66,7 +68,7 @@ size_t _read(void *p, size_t n) {
     if(total_input_size >= MAX_INPUT_SIZE){
         _finalize();
     }
-    x[0] = rand()%256;
+    x[0] = rand()%10;
     return n;
 }
 

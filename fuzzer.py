@@ -46,7 +46,7 @@ class FuzzerLogger:
         self._csvname = self._log_path + fuzzer._program.pname + '_' + self._strategy_name +'.csv'
         
         initial_parameter_keys = ['no_reset', 'hot_restart', 'save_interesting', 'sample_type', 'coverage_type', 'input_size', 'max_popsize', 'popsize_scale', 'max_gens', 'max_eval', 'timeout', 'seed', 'strategy']
-        initial_parameter_values = [fuzzer.no_reset, fuzzer.hot_restart, fuzzer.save_interesting, fuzzer.sample_type, fuzzer._program.coverage_type, fuzzer.cma_es.input_size, fuzzer.cma_es._max_popsize, fuzzer.cma_es._popsize_scale, fuzzer.cma_es._max_gens, fuzzer.cma_es.max_evaluations, fuzzer._timeout, fuzzer.cma_es.seed, self._strategy_name]
+        initial_parameter_values = [fuzzer.no_reset, fuzzer.hot_restart, fuzzer.save_interesting, fuzzer.sample_type, fuzzer._program.coverage_type, fuzzer.cma_es.input_size, fuzzer.cma_es._max_popsize, fuzzer.cma_es._popsize_scale, fuzzer.cma_es._max_gens, fuzzer.cma_es.max_evaluations, fuzzer._timeout, fuzzer.seed, self._strategy_name]
 
         self._csv_lines.append(list(self._log.keys()))
 
@@ -150,6 +150,7 @@ class Program:
     MAX_INPUT_SIZE = 1000
 
     COV_DIGITS = 2
+    INPUT_TIMEOUT = 5
 
     DEFAULT_DIRS = {'log' : 'logs/', 'output' : 'output/', 'verifiers': 'verifiers/'}
     def __init__(self, path, output_dir, log_dir, timeout, sample_type, coverage_type, verifier_path = '/__VERIFIER.c', verifier_input_size_path = '/__VERIFIER_input_size.c'):
@@ -200,19 +201,32 @@ class Program:
     def _compile_input_size(self):
         return subprocess.run(['gcc', self.path, self.verifier_input_size_path, '-o', self.output_dir + self.pname + '_input_size', '--coverage']).returncode
 
-    def cal_input_size(self):
-        output = subprocess.run(self.output_dir + self.pname + '_input_size', capture_output=True)
-        returncode = output.returncode
-        if returncode != self.INPUT_SIZE_EXECUTED:
-            return 0, returncode
+    def cal_input_size(self, seed):
+        input_size = -1
+        for _ in range(10):
+            try:
+                output = subprocess.run(self.output_dir + self.pname + '_input_size', capture_output=True, input = seed.to_bytes(4,'little', signed=False), timeout=self.INPUT_TIMEOUT)
+            except subprocess.TimeoutExpired:
+                returncode = None
+                continue
+            
+            returncode = output.returncode
+            if returncode == self.SEGMENTATION_FAULT:
+                continue
+            if returncode != self.INPUT_SIZE_EXECUTED:
+                return 0, returncode
 
-        output = output.stdout.decode()
-        input_size = max(int(output[output.rfind('n') + 1:]), self.MIN_INPUT_SIZE)
-        return input_size, returncode
+            output = output.stdout.decode()
+            input_size = max(int(output[output.rfind('n') + 1:]), input_size)
+
+        if input_size == -1: # segmentation fault or timeout
+            input_size = self.MAX_INPUT_SIZE
+
+        return max(input_size, self.MIN_INPUT_SIZE), returncode
 
     def cal_coverage_item_size(self):
         gcov = self._gcov('-b', '-c')
-        self._delete_gcda()
+        self.delete_gcda()
         gcov_lines = gcov.split('\n')
         if self.coverage_type == 'line':
             offset = 1
@@ -232,7 +246,7 @@ class Program:
             return int(text[text.rfind('f')+1:])
 
     @_timeit
-    def _delete_gcda(self):
+    def delete_gcda(self):
         if os.path.isfile(self.pname + '.gcda'):
             os.remove(self.pname+'.gcda')
         if os.path.isfile('__VERIFIER.gcda'):
@@ -284,19 +298,19 @@ class Program:
     # @_timeit
     def get_line_ids(self):
         gcov = self._gcov('-t')
-        self._delete_gcda()
+        self.delete_gcda()
         return self.cal_lines(gcov)
 
     # @_timeit
     def get_branche_ids(self):
         gcov = self._gcov('-b', '-c', '-t')
-        self._delete_gcda()
+        self.delete_gcda()
         return self.cal_branches(gcov)
 
     @_timeit
     def get_line_and_branch_coverages(self):
         gcov = self._gcov('-b', '-c')
-        self._delete_gcda()
+        self.delete_gcda()
         gcov_lines = gcov.split('\n')
         index = -1
         line_offset = 15
@@ -318,12 +332,11 @@ class Program:
 
 
 class CMA_ES:
-    DEFAULTS = {'seed' : None, 'init_popsize' : 10, 'max_popsize' : 1000, 'max_gens' : 1000, 'popsize_scale' : 10, 'max_evaluations' : 10 ** 5, 'x0' : [128], 'sigma0' : 0.3*256, 'bounds' : [0, 256]}
+    DEFAULTS = {'seed' : None, 'init_popsize' : 10, 'max_popsize' : 1000, 'max_gens' : 1000, 'popsize_scale' : 10, 'max_evaluations' : np.inf, 'x0' : [128], 'sigma0' : 0.3*256, 'bounds' : [0, 256]}
 
     def __init__(self, seed, input_size, init_popsize, max_popsize, max_gens, popsize_scale, max_evaluations):
-        self.seed = self.init_seed(seed)
         self.input_size = input_size
-        self._options = dict(popsize = init_popsize, verb_disp = 0, seed = self.seed - 1, bounds = [self.DEFAULTS['bounds'][0], self.DEFAULTS['bounds'][1]])
+        self._options = dict(popsize = init_popsize, verb_disp = 0, seed = seed - 1, bounds = [self.DEFAULTS['bounds'][0], self.DEFAULTS['bounds'][1]])
         self._args = dict(x0 = self.DEFAULTS['x0'] * self.input_size, sigma0 = self.DEFAULTS['sigma0'])
         self._max_popsize = max_popsize
         self._max_gens = max_gens
@@ -334,10 +347,6 @@ class CMA_ES:
         self.evaluations = 0
         self.result = None
 
-    def init_seed(self, seed):
-        if seed is None:
-            return random.randint(10, 1000)
-        return seed
 
     def init_cmaes(self, mean = None, sigma = None, sigmas = None, fixed_variables = None):
         self._options['seed'] += 1
@@ -556,13 +565,19 @@ class Fuzzer:
         self.save_interesting = save_interesting
         self.hot_restart_threshold = hot_restart_threshold
         self.sample_type = sample_type
+        self.seed = self.init_seed(seed)
 
         self.encode = self._select_encode(sample_type)
         self._program = Program(program_path, output_dir, log_dir, timeout, sample_type, coverage_type)
         self._check_compile_error(self._program._compile_input_size())
-        self.cma_es = CMA_ES(seed, self._cal_input_size(input_size), init_popsize, max_popsize, max_gens, popsize_scale, max_evaluations)
+        self.cma_es = CMA_ES(self.seed, self._cal_input_size(input_size, self.seed), init_popsize, max_popsize, max_gens, popsize_scale, max_evaluations)
         self._samplecollector = SampleCollector(save_interesting, self._program.cal_coverage_item_size())
         self._logger = FuzzerLogger(strategy, live_logs).resister(self)
+
+    def init_seed(self, seed):
+        if seed is None:
+            return random.randint(10, 1000)
+        return seed
 
     def _select_encode(self, sample_type):
         if sample_type == 'real':
@@ -591,9 +606,9 @@ class Fuzzer:
 
         self._statuses.append(state)
 
-    def _cal_input_size(self, input_size):
+    def _cal_input_size(self, input_size, seed):
         if input_size is None:
-            input_size, returncode = self._program.cal_input_size()
+            input_size, returncode = self._program.cal_input_size(seed)
             self._check_runtime_error(returncode)
         else:
             input_size = min(max(input_size, Program.MIN_INPUT_SIZE), Program.MAX_INPUT_SIZE)
@@ -833,7 +848,7 @@ class Fuzzer:
         except:
             self._interrupted = sys.exc_info()[0]
         finally:
-            self._program._delete_gcda()
+            self._program.delete_gcda()
             self._program._timeout = None
 
         return self.parse_total_samples_to_input_vectors()
@@ -860,10 +875,10 @@ class Fuzzer:
         print('total sample len:', len(total_samples))
         print('total samples:', total_samples)
         print('total input vectors:', self.parse_total_samples_to_input_vectors())
-        print('line_coverage:', 0.01 * line)
-        print('branch_coverage:', 0.01 * branch)
+        print('line_coverage:', round(0.01 * line, 4))
+        print('branch_coverage:', round(0.01 * branch, 4))
         print('total_eval:', self.cma_es.evaluations)
-        print('seed:', self.cma_es.seed)
+        print('seed:', self.seed)
 
 def parse_argv_to_fuzzer_kwargs():
     arg_parser = argparse.ArgumentParser()

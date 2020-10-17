@@ -8,7 +8,9 @@ static int ERROR = 100;
 static int ASSUME = 101;
 static int OVER_MAX_INPUT_SIZE = 102;
 
-// ssize_t _read(void *p, size_t n);
+static int MAX_INPUT_SIZE = 1000;
+
+static int input_size;
 
 unsigned int parse_signed(unsigned int x, int bits) {
     return x / (1U << (32 - bits)) - (1U << (bits - 1));
@@ -20,6 +22,10 @@ unsigned int parse_unsigned(unsigned int x, int bits) {
 
 unsigned int _read(size_t n, int is_signed) {
     unsigned int x;
+    input_size += 1;
+    if (input_size > MAX_INPUT_SIZE) {
+        exit(OVER_MAX_INPUT_SIZE);
+    }
     read(0, &x, sizeof(x));
     if (is_signed) {
         return parse_signed(x, 8*n);
@@ -38,6 +44,10 @@ unsigned long parse_unsigned_long(unsigned long x, int bits) {
 
 unsigned long _read2(size_t n, int is_signed) {
     unsigned long x;
+    input_size += 2;
+    if (input_size > MAX_INPUT_SIZE) {
+        exit(OVER_MAX_INPUT_SIZE);
+    }
     read(0, &x, sizeof(x));
     if (is_signed) {
         return parse_signed_long(x, 8*n);
