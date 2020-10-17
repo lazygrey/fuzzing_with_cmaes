@@ -112,7 +112,7 @@ class FuzzerLogger:
 
         self._log_message_lines.append('execution time for each method:')
         self._log_message_lines.append(''.join([self.format_pretty(key, max(len(key),6) + 2) for key, value in time_log.items()]))
-        self._log_message_lines.append(''.join([self.format_pretty(round(value,4), max(len(key),6) + 2) for key, value in time_log.items()]))
+        self._log_message_lines.append(''.join([self.format_pretty(round(value,2), max(len(key),6) + 2) for key, value in time_log.items()]))
         self._log_message_lines.append('\n-----------------------------------------------------------------------------------------------------------------------------------------------------------')
 
         if self._live:
@@ -120,7 +120,7 @@ class FuzzerLogger:
                 f.write('execution time for each method:\n')
                 f.writelines(self.format_pretty(key, max(len(key), 6) + 2) for key, value in time_log.items())
                 f.write('\n')
-                f.writelines(self.format_pretty(round(value,4), max(len(key), 6) + 2) for key, value in time_log.items())
+                f.writelines(self.format_pretty(round(value,2), max(len(key), 6) + 2) for key, value in time_log.items())
                 f.write('\n-----------------------------------------------------------------------------------------------------------------------------------------------------------\n')
 
     def write_logs(self):
