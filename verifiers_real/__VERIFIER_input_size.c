@@ -68,7 +68,7 @@ size_t _read(void *p, size_t n) {
     if(total_input_size >= MAX_INPUT_SIZE){
         _finalize();
     }
-    x[0] = rand()%10;
+    x[0] = rand()%5;
     return n;
 }
 
