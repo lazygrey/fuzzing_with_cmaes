@@ -175,6 +175,7 @@ void __VERIFIER_assume(int arg) {
     //     // __VERIFIER_assume(arg);
     //     exit(10);
     // }
+    _finalize();
 }
 
 // int main() {

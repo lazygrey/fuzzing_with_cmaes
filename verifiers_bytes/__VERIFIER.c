@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <unistd.h>
-// #include <stdio.h>
+#include <stdio.h>
 // #include <assert.h>
 
 
@@ -16,11 +16,18 @@ void __VERIFIER_error() {
     exit(ERROR);
 }
 
+void _print_input_size(){
+    printf("n%d",input_size);
+}
+
 ssize_t _read (void * p, size_t n) {
-    input_size += n;
-    if (input_size > MAX_INPUT_SIZE) {
+    if (input_size == 0) {
+        atexit(_print_input_size);
+    }
+    if (input_size + n > MAX_INPUT_SIZE) {
         exit(OVER_MAX_INPUT_SIZE);
     }
+    input_size += n;
     return read(0, p, n);
 }
 
