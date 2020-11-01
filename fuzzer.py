@@ -345,7 +345,7 @@ class Program:
 
 
 class CMA_ES:
-    DEFAULTS = {'seed' : None, 'init_popsize' : 10, 'max_popsize' : 1000, 'max_gens' : 1000, 'popsize_scale' : 2, 'max_evaluations' : np.inf, 'x0' : [128], 'sigma0' : 0.3*256, 'bounds' : [0, 256]}
+    DEFAULTS = {'seed' : None, 'init_popsize' : 10, 'max_popsize' : 160, 'max_gens' : 1000, 'popsize_scale' : 4, 'max_evaluations' : np.inf, 'x0' : [128], 'sigma0' : 0.3*256, 'bounds' : [0, 256]}
 
     def __init__(self, seed, input_size, init_popsize, max_popsize, max_gens, popsize_scale, max_evaluations):
         self.input_size = input_size
