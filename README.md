@@ -59,7 +59,7 @@ OPTIONAL:
                     type of coverage for obejctive function for CMA-ES-Fuzzer
 -hrt HOT_RESTART_THRESHOLD, --hot_restart_threshold HOT_RESTART_THRESHOLD
                     threshold for the optimized sigma vector to decide whether their components, among mean vector components, are reset to default for the hot restart.
--nr, --no_reset       deactivate reset after not optimized (this is for the most basic version)
+-nr, --no_reset       deactivate reset after not optimized (only for testing)
 -hr, --hot_restart    activate hot restart while optimizing samples
 -si, --save_interesting
                     save interesting coverage item ids while optimizing
