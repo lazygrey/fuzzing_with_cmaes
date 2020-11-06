@@ -1,0 +1,42 @@
+<?xml version="1.0"?>
+<!DOCTYPE benchmark PUBLIC "+//IDN sosy-lab.org//DTD BenchExec benchmark 1.18//EN" "https://www.sosy-lab.org/benchexec/benchmark-1.18.dtd">
+<benchmark tool="cmaes" displayName="cmaFuzzer" timelimit="15 min" memlimit="7 GB" cpuCores="1">
+
+  <require cpuModel="Intel Xeon E3-1230 v5 @ 3.40 GHz" />
+
+  <option name="--sample_type">real</option>
+  <option name="--coverage_type">branch</option>
+  <option name="--save_interesting"></option>
+  <option name="--seed">500</option>
+  <option name="--timeout">840</option>
+  <option name="--strategy">real-branch-IPOP-save_interesting</option>
+  
+
+  <resultfiles>**.csv</resultfiles>
+
+  <!--<rundefinition name="test-comp20_prop-coverage-error-call">
+    <propertyfile>../../../sv-benchmarks/c/properties/coverage-error-call.prp</propertyfile>
+  </rundefinition>-->
+
+  <rundefinition name="test-comp20_prop-coverage-branches">
+    <propertyfile>../../../sv-benchmarks/c/properties/coverage-branches.prp</propertyfile>
+  </rundefinition>
+
+  <tasks name="ReachSafety-BitVectors">
+    <includesfile>../../../sv-benchmarks/c/ReachSafety-BitVectors.set</includesfile>
+    <option name="-32"/>
+  </tasks>
+  <tasks name="ReachSafety-Sequentialized">
+    <includesfile>../../../sv-benchmarks/c/ReachSafety-Sequentialized.set</includesfile>
+    <option name="-32"/>
+  </tasks>
+  
+  <columns>
+    <column title="Line Coverage">line_coverage:</column>
+    <column title="Branch Coverage">branch_coverage:</column>
+    <column title="Total Evaluations">total_eval:</column>
+    <column title="Initial Seed">seed:</column>
+  </columns>
+
+</benchmark>
+

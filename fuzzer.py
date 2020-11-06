@@ -913,7 +913,7 @@ def parse_argv_to_fuzzer_kwargs():
     arg_parser.add_argument('-hrt', '--hot_restart_threshold', type = int, default = Fuzzer.DEFAULTS['hot_restart_threshold'],
         help = 'threshold for the optimized sigma vector to decide whether their components, among mean vector components, are reset to default for the hot restart.')
     arg_parser.add_argument('-nr', '--no_reset', action = 'store_true',
-        help = 'deactivate reset after not optimized (this is for the most basic version)')
+        help = 'deactivate reset after not optimized (only for testing)')
     arg_parser.add_argument('-hr', '--hot_restart', action = 'store_true',
         help = 'activate hot restart while optimizing samples')
     arg_parser.add_argument('-si', '--save_interesting', action = 'store_true',
