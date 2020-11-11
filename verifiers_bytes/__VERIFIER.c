@@ -24,9 +24,6 @@ ssize_t _read (void * p, size_t n) {
     if (input_size == 0) {
         atexit(_print_input_size);
     }
-    if (input_size + n > MAX_INPUT_SIZE) {
-        exit(OVER_MAX_INPUT_SIZE);
-    }
     input_size += n;
     return read(0, p, n);
 }

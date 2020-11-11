@@ -217,6 +217,8 @@ class Program:
         else:
             returncode = output.returncode
 
+        if returncode == self.SEGMENTATION_FAULT:
+            return 2
         if returncode != self.INPUT_SIZE_EXECUTED:
             return 0
 
@@ -266,7 +268,7 @@ class Program:
         except ValueError:
             input_size = 0
 
-        self.input_size = max(self.input_size, input_size)
+        self.input_size = min(max(self.input_size, input_size),self.MAX_INPUT_SIZE)
         return returncode
 
     @_timeit

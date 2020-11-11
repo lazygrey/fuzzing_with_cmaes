@@ -21,12 +21,11 @@ unsigned int _read(size_t n, int signed_) {
     if (input_size == 0) {
         atexit(_print_input_size);
     }
-    if (input_size + 1 > MAX_INPUT_SIZE) {
-        exit(OVER_MAX_INPUT_SIZE);
-    }
     input_size += 1;
     unsigned int x;
-    read(0, &x, sizeof(x));
+    if (!read(0, &x, sizeof(x))){
+        return 0;
+    }
     return (x >> (32 - 8*n)) - signed_ * (1U<<(8*n-1));
 }
 
@@ -34,12 +33,11 @@ unsigned long _read2(size_t n, int signed_) {
     if (input_size == 0) {
         atexit(_print_input_size);
     }
-    if (input_size + 2> MAX_INPUT_SIZE) {
-        exit(OVER_MAX_INPUT_SIZE);
-    }
     input_size += 2;
     unsigned long x;
-    read(0, &x, sizeof(x));
+    if (!read(0, &x, sizeof(x))){
+        return 0;
+    }
     return (x >> (64 - 8*n)) - signed_ * (1UL<<(8*n-1));
 }
 
