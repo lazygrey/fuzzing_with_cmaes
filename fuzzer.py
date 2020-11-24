@@ -395,6 +395,11 @@ class CMA_ES:
     def get_bounds(self):
         return self.DEFAULTS['bounds']
 
+    def get_iterations(self):
+        if self.result == None:
+            return 0
+        return self.result.iterations
+
     @_timeit
     def stop(self):
         return self._es.stop() or self._es.result.iterations >= self._max_gens or self.result.fbest == -100.0 or self.evaluations > self.max_evaluations
@@ -557,7 +562,7 @@ class SampleCollector:
 
 
 class Fuzzer:
-    DEFAULTS = {'timeout' : 14 * 60, 'sample_type' : 'bytes', 'hot_restart_threshold' : 0.5*0.3*256}
+    DEFAULTS = {'timeout' : 14 * 60, 'sample_type' : 'bytes', 'hot_restart_threshold' : 0.5*0.3*256, 'random_run' : False}
     VERIFIER_ERROS = {Program.SAFE : 'SAFE', Program.ERROR : 'ERROR', Program.ASSUME : 'ASSUME_ERROR', Program.OVER_MAX_INPUT_SIZE: 'OVER_MAX_INPUT_SIZE'}
     PARSING_SCALE = 2 ** (32 - 8)
     UNSIGNED_INT_MIN = 0
@@ -568,7 +573,7 @@ class Fuzzer:
     NO_INTERESTING_BRANCHES = 'the given program has no interesting branches'
     NO_INPUT = 'the given program takes no inputs'
 
-    def __init__(self, program_path, no_reset = False, live_logs = False, hot_restart = False, save_interesting = False, strategy = None, input_size = None,
+    def __init__(self, program_path, no_reset = False, live_logs = False, hot_restart = False, save_interesting = False, strategy = None, input_size = None, random_run = DEFAULTS['random_run'],
     sample_type = DEFAULTS['sample_type'], timeout = DEFAULTS['timeout'],  hot_restart_threshold = DEFAULTS['hot_restart_threshold'], coverage_type = Program.DEFAULTS['coverage_type'],
     output_dir = Program.DEFAULT_DIRS['output'], log_dir = Program.DEFAULT_DIRS['log'], seed = CMA_ES.DEFAULTS['seed'], init_popsize = CMA_ES.DEFAULTS['init_popsize'],
     max_popsize = CMA_ES.DEFAULTS['max_popsize'], max_gens = CMA_ES.DEFAULTS['max_gens'], max_evaluations = CMA_ES.DEFAULTS['max_evaluations'], popsize_scale = CMA_ES.DEFAULTS['popsize_scale']):
@@ -578,6 +583,7 @@ class Fuzzer:
         self._stop_reason = ''
         self._statuses = []
 
+        self.random_run = random_run
         self.no_reset = no_reset
         self.hot_restart = hot_restart
         self.save_interesting = save_interesting
@@ -699,7 +705,7 @@ class Fuzzer:
     def get_current_state(self):
         return dict(current_testcase = self._samplecollector.get_current_size(), total_testcase =  self._samplecollector.get_total_size(),
          current_coverage = round(self.get_current_coverage(), 4), total_coverage = round(self.get_total_coverage(), 4),
-         CMA_ES_seed = self.cma_es._options['seed'],popsize = self.cma_es._options['popsize'], generations = self.cma_es.result.iterations, evaluations = self.cma_es.evaluations)
+         CMA_ES_seed = self.cma_es._options['seed'],popsize = self.cma_es._options['popsize'], generations = self.cma_es.get_iterations(), evaluations = self.cma_es.evaluations)
 
     def _stop(self):
         if self._interrupted is not None:
@@ -852,11 +858,30 @@ class Fuzzer:
 
         return True
 
+    def random_sampling(self):
+        try:
+            while not self._stop():
+                best_cov = self.get_total_coverage()
+                sample = [min(int(random.uniform(0,256)),255) for _ in range(self._program.input_size)]
+                self.objective(sample)
+                cov = self.get_total_coverage()
+                if cov > best_cov:
+                    best_cov = cov
+                    self._logger.report_changes(True, state = 'random')
+                self.cma_es.evaluations += 1
+        except (subprocess.TimeoutExpired, KeyboardInterrupt, StopAsyncIteration) as e:
+            self._interrupted = e
+            self._logger.report_changes(True, state = 'random')
+
+
     def generate_testsuite(self):
         try:
             self._program._compile_program()
             if self.check_no_early_stop():
-                self.optimize_samples()
+                if self.random_run:
+                    self.random_sampling()
+                else:
+                    self.optimize_samples()
         except (subprocess.TimeoutExpired,  KeyboardInterrupt, StopIteration) as e:
             self._interrupted = e
         finally:
@@ -884,9 +909,9 @@ class Fuzzer:
         self._logger.print_logs()
         self._logger.write_csv()
 
-        print('total sample len:', len(total_samples))
-        print('total samples:', total_samples)
-        print('total input vectors:', self.parse_total_samples_to_input_vectors())
+        # print('total sample len:', len(total_samples))
+        # print('total samples:', total_samples)
+        # print('total input vectors:', self.parse_total_samples_to_input_vectors())
         print('line_coverage:', round(0.01 * line, 4))
         print('branch_coverage:', round(0.01 * branch, 4))
         print('total_eval:', self.cma_es.evaluations)
@@ -926,6 +951,8 @@ def parse_argv_to_fuzzer_kwargs():
         help = 'strategy label for log and csv')
     arg_parser.add_argument('-ll', '--live_logs', action = 'store_true',
         help = 'write logs as txt file in log files whenever it changes')
+    arg_parser.add_argument('--random_run', action = 'store_true',
+        help = 'generate samples randomly without applying CMA-ES')
     arg_parser.add_argument('program_path', nargs = '+' ,type = str,
         help = 'relative program path to test (only last argument will be regarded as program path)')
 
